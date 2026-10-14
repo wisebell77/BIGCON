@@ -197,6 +197,17 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:16px" id="g-rc-wrap">
+      <h2>🎟️ 레인체크 현황 <span class="pill">예시 값</span></h2>
+      <div class="muted" style="margin-bottom:8px">비로 못 온 손님에게 준 다음 방문 쿠폰. 평일 사용 시 20%, 다른 주말 10% 할인 (할인율은 예시)</div>
+      <div class="kpis" style="margin-bottom:8px">
+        <div class="card kpi"><div class="k">발급</div><div class="v">1,200장</div><div class="n">이번 비 예보 기준 (예시)</div></div>
+        <div class="card kpi"><div class="k">사용률</div><div class="v">45%</div><div class="n">유효기간 2개월 (예시)</div></div>
+        <div class="card kpi"><div class="k">평일 / 주말 사용</div><div class="v">60 : 40</div><div class="n">평일 할인을 더 크게 → 한산한 평일로 분산</div></div>
+      </div>
+      <div class="muted">왜 필요한가: 춘천은 비 오는 날 관광객 매출이 −14.7% 줄고, 줄어든 매출은 다음 날 돌아오지 않습니다. 토요일은 이미 붐비므로(숙박 170, 음식점 154, 평일=100) 평일 방문을 더 우대합니다.</div>
+    </div>
+
     <div class="card" style="margin-top:16px">
       <h2>장기 시나리오: 7~12월 날씨 때문에 줄어드는 매출</h2>
       <div class="legend"><span><i style="background:var(--accent)"></i>춘천</span><span><i style="background:var(--mid)"></i>강남</span></div>
@@ -229,17 +240,15 @@ const ACTS = {
   rain: (ind, drop) => [
     { e: "🥬", t: `재료 준비량 ${Math.round(Math.abs(drop))}% 줄이기 검토`, d: "비 다음 날 매출이 돌아오지 않아, 남은 재료는 그대로 손실이 됩니다." },
     { e: "🛵", t: "배달·포장 할인 켜기", d: "가게에 오기 어려운 손님을 배달로 돌립니다." },
-    { e: "🎟️", t: "춘천시 우천 쿠폰 참여", d: "비 오는 날 사용하면 지역화폐 추가 적립 (아이디어)", btn: "참여" },
-    { e: "🛡️", t: "날씨 보험 자동 청구", d: "영업시간 비 20mm 이상이면 업종별 정액 지급 (시 단체가입 아이디어)", btn: "확인" },
-  ].concat(ind.id === "stay" || ind.id === "cafe"
-    ? [{ e: "🗺️", t: "비 오는 날 실내 관광 코스에 가게 등록", d: "관광객(외지인) 매출이 비 오는 날 −14.7%로 가장 크게 줄어듭니다.", btn: "등록" }]
-    : []),
+    { e: "🎟️", t: "레인체크 발송: 다음 방문 쿠폰", d: "비로 예약을 취소·연기한 손님에게 자동 발송. 평일 방문 20%, 다른 주말 10% 할인 (할인율은 예시)", btn: "발송" },
+  ],
   drizzle: () => [
     { e: "☂️", t: "평소처럼 준비하세요", d: "약한 비(1~10mm)는 매출을 3% 정도만 줄였습니다." },
     { e: "🪧", t: "입구에 우산꽂이·빗물 매트", d: "작은 불편을 줄여 손님을 붙잡습니다." },
   ],
   heat: () => [
     { e: "🕖", t: "낮(12~18시) 대신 저녁 영업 강화", d: "더운 날 낮 소비가 저녁으로 옮겨갔습니다." },
+    { e: "🏮", t: "저녁 야시장 참여", d: "시가 여는 저녁 상권 행사에 가게 등록 (아이디어)", btn: "참여" },
     { e: "🧊", t: "무더위 쉼터 가게로 신청", d: "냉방비 일부 지원 + 쉼터 지도에 가게 노출 (아이디어)", btn: "신청" },
     { e: "👵", t: "어르신 손님 배려 안내", d: "60대 이상 유동인구가 많은 퇴계동은 그늘막 설치 우선 대상" },
   ],
@@ -309,7 +318,7 @@ const SC = [
     kpis: [
       { k: "예상 매출 손실 (하루)", v: "9.7억 원", n: "대면소비 업종 합계" },
       { k: "취약 업소 수 (춘천 전체)", v: "3,111곳", n: "취약·매우 취약 등급 업종" },
-      { k: "대응 유형", v: "손실 보전 + 사전 경보", n: "비 다음 날 반등 없음" },
+      { k: "대응 유형", v: "사전 경보 + 레인체크", n: "비 다음 날 반등 없음 → 다른 날로 옮겨 살리기" },
     ],
     rank: [
       { name: "기타요식", p: "0.64", loss: "7,900만 원" },
@@ -364,6 +373,8 @@ function renderGov() {
     b.onclick = () => { gsc = x.id; renderGov(); };
     sc.appendChild(b);
   });
+
+  document.getElementById("g-rc-wrap").style.display = s.id === "cc" ? "" : "none";
 
   document.getElementById("g-kpis").innerHTML = s.kpis.map(k =>
     `<div class="card kpi"><div class="k">${k.k}</div><div class="v">${k.v}</div><div class="n">${k.n}</div></div>`).join("");
