@@ -10,6 +10,7 @@
     --accent: #2f6fde; --accent-soft: #e6eefc;
     --high: #d64545; --high-soft: #fde8e8; --mid: #d9891f; --mid-soft: #fdf1df; --low: #2e9b62; --low-soft: #e2f5ea;
     --phone: #11151d;
+    --c1-bg: #d6e4fb; --c1-bd: #2f6fde; --c2-bg: #ecf2fd; --c2-bd: #a8c1ee; --c3-bd: #cfd5df;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
@@ -17,6 +18,7 @@
       --accent: #6c9cf0; --accent-soft: #1f2d47;
       --high: #f07070; --high-soft: #3a1f22; --mid: #f0aa4e; --mid-soft: #3a2c19; --low: #5cc98d; --low-soft: #183025;
       --phone: #000;
+      --c1-bg: #23395f; --c1-bd: #6c9cf0; --c2-bg: #1a2436; --c2-bd: #3d5580; --c3-bd: #3a404b;
     }
   }
   * { box-sizing: border-box; }
@@ -110,8 +112,9 @@
   .cell .ic { font-size: 16px; line-height: 1.2; }
   .cell.sat .dn { color: var(--accent); }
   .cell.sun .dn { color: var(--high); }
-  .cell.t2 { background: transparent; }
-  .cell.t3 { background: transparent; border-style: dashed; }
+  .cell.t1 { background: var(--c1-bg); border-color: var(--c1-bd); }
+  .cell.t2 { background: var(--c2-bg); border-color: var(--c2-bd); }
+  .cell.t3 { background: transparent; border-color: var(--c3-bd); border-style: dashed; }
   .cell.t3 .ic { opacity: .45; }
   .cell.past { opacity: .3; cursor: default; }
   .cell.past .ic { visibility: hidden; }
@@ -120,7 +123,7 @@
   .dot.high { background: var(--high); } .dot.mid { background: var(--mid); } .dot.low { background: var(--low); } .dot.heat { background: var(--mid); }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--muted); margin-top: 8px; }
   .cal-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line); margin-right: 3px; vertical-align: -1px; }
-  .lg.t1 { background: var(--card); } .lg.t3 { border-style: dashed; }
+  .lg.t1 { background: var(--c1-bg); border-color: var(--c1-bd); } .lg.t2 { background: var(--c2-bg); border-color: var(--c2-bd); } .lg.t3 { border-color: var(--c3-bd); border-style: dashed; }
   .screen { min-height: 760px; }
 </style>
 </head>
@@ -156,9 +159,10 @@
               <div class="cal-title" id="o-cal-title"></div>
               <div class="cal" id="o-cal"></div>
               <div class="cal-legend">
-                <span><b class="lg t1"></b>1~3일 단기예보</span>
-                <span><b class="lg t2"></b>4~10일 중기예보</span>
-                <span><b class="lg t3"></b>11일~ 한 달 경향</span>
+                <span style="width:100%">예보 정확도</span>
+                <span><b class="lg t1"></b>높음 · 1~3일 단기</span>
+                <span><b class="lg t2"></b>보통 · 4~10일 중기</span>
+                <span><b class="lg t3"></b>낮음 · 11일~ 한 달 경향</span>
               </div>
             </div>
             <div class="card forecast">
