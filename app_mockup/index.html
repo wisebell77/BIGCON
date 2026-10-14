@@ -100,13 +100,35 @@
   .muted { color: var(--muted); font-size: 12px; }
   .msg { font-size: 14px; }
   .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+  .cal-title { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .cal .wd { text-align: center; font-size: 11px; color: var(--muted); }
+  .cell { position: relative; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px;
+    height: 46px; padding: 2px 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    cursor: pointer; font: inherit; }
+  .cell .dn { font-size: 11px; line-height: 1; }
+  .cell .ic { font-size: 16px; line-height: 1.2; }
+  .cell.sat .dn { color: var(--accent); }
+  .cell.sun .dn { color: var(--high); }
+  .cell.t2 { background: transparent; }
+  .cell.t3 { background: transparent; border-style: dashed; }
+  .cell.t3 .ic { opacity: .45; }
+  .cell.past { opacity: .3; cursor: default; }
+  .cell.past .ic { visibility: hidden; }
+  .cell.sel { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .cell .dot { position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; }
+  .dot.high { background: var(--high); } .dot.mid { background: var(--mid); } .dot.low { background: var(--low); } .dot.heat { background: var(--mid); }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 8px; font-size: 10px; color: var(--muted); margin-top: 8px; }
+  .cal-legend .lg { display: inline-block; width: 10px; height: 10px; border-radius: 3px; border: 1px solid var(--line); margin-right: 3px; vertical-align: -1px; }
+  .lg.t1 { background: var(--card); } .lg.t3 { border-style: dashed; }
+  .screen { min-height: 760px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>☔ 날씨 상권 레이더 <span class="pill">시연용 목업</span></h1>
-  <div class="sub">기상 예보 → 상권별 위험 → 사장님 행동 카드 + 시청 지원 우선순위</div>
+  <div class="sub">한 달 날씨 달력 → 상권별 위험 → 기간별 행동 카드 + 시청 지원 우선순위</div>
   <div class="notice">
     숫자는 팀 분석 보고서(「기본 분석 및 정의 제안」, 10/11) 결과를 옮긴 것입니다. 보고서에 값이 없는 칸은 "—"로 비워 두었습니다.
     실제 모델이 돌아가는 화면이 아니라, 결과를 이런 식으로 보여줄 수 있다는 시연용입니다. 행동 카드 내용은 아이디어 초안이라 팀 논의가 필요합니다.
@@ -127,24 +149,33 @@
           <div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
           <div class="app-head">
             <div class="hello">춘천 · <span id="o-ind-label">카페</span> 사장님, 안녕하세요</div>
-            <div class="shop">내일 장사 날씨 리포트</div>
+            <div class="shop">날씨 장사 달력</div>
           </div>
           <div class="app-body">
-            <div class="card forecast">
-              <div class="icon" id="o-icon">🌧️</div>
-              <div>
-                <div class="day" id="o-day">내일 (토)</div>
-                <div class="what" id="o-what">영업시간 비 30mm</div>
+            <div class="card cal-card">
+              <div class="cal-title" id="o-cal-title"></div>
+              <div class="cal" id="o-cal"></div>
+              <div class="cal-legend">
+                <span><b class="lg t1"></b>1~3일 단기예보</span>
+                <span><b class="lg t2"></b>4~10일 중기예보</span>
+                <span><b class="lg t3"></b>11일~ 한 달 경향</span>
               </div>
             </div>
-            <div class="risk high" id="o-risk">
-              <div class="muted" style="color:inherit">매출 감소 위험</div>
-              <div class="lvl" id="o-lvl">높음</div>
+            <div class="card forecast">
+              <div class="icon" id="o-icon"></div>
+              <div>
+                <div class="day" id="o-day"></div>
+                <div class="what" id="o-what"></div>
+              </div>
+            </div>
+            <div class="risk" id="o-risk">
+              <div class="muted" style="color:inherit" id="o-risk-k"></div>
+              <div class="lvl" id="o-lvl"></div>
               <div class="why" id="o-why"></div>
             </div>
             <div class="card acts" id="o-acts"></div>
           </div>
-          <div class="nav"><span>🏠 홈</span><span>📊 내 매출</span><span>🎁 지원</span><span>⚙️ 설정</span></div>
+          <div class="nav"><span>📅 달력</span><span>📊 내 매출</span><span>🎁 지원</span><span>⚙️ 설정</span></div>
         </div>
       </div>
 
@@ -156,13 +187,22 @@
             <div class="chips" id="c-ind"></div>
           </div>
           <div class="ctl">
-            <label>내일 예보</label>
-            <div class="chips" id="c-wx"></div>
+            <label>오늘 날짜 (바꾸면 예보 단계가 바뀝니다)</label>
+            <div class="chips" id="c-today"></div>
           </div>
           <div class="explain" id="c-explain"></div>
           <div class="flow">
             <span class="box">기상청 예보</span>→<span class="box">업종별 날씨 민감도 (회귀 분석)</span>→
-            <span class="box">위험 등급</span>→<span class="box">행동 카드</span>
+            <span class="box">위험 등급</span>→<span class="box">기간별 행동 카드</span>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h2>얼마나 앞을 보나</h2>
+          <div class="explain">
+            <b>1~3일 뒤</b> (단기예보, 시간별): 정확한 강수량·기온 → 재료·배달·레인체크 발송 같은 <b>당일 준비</b><br>
+            <b>4~10일 뒤</b> (중기예보, 하루 단위): 비·더위 가능성 → 발주·근무표·예약 손님 안내 같은 <b>미리 준비</b><br>
+            <b>11일 이후</b> (1개월 전망, 주 단위 경향): 평년보다 더울지·비가 많을지 → 야시장 신청·냉방 점검 같은 <b>계획</b><br><br>
+            달력 날씨는 <b>2025년 춘천 실제 관측값</b>(기상청 ASOS 시간자료)을 예보처럼 재생한 것입니다. 실제 예보는 관측과 다를 수 있습니다.
           </div>
         </div>
         <div class="card" style="margin-top:12px">
@@ -229,13 +269,43 @@ const IND = [
   { id: "fash",   name: "패션",          rain: -15 },
   { id: "retail", name: "생활·기타소매", rain: -18 },
 ];
-const WX = [
-  { id: "r30sat", label: "토요일 비 30mm", icon: "🌧️", day: "내일 (토)", what: "영업시간 비 30mm", type: "rain", weekend: true },
-  { id: "r15wd",  label: "평일 비 15mm",   icon: "🌦️", day: "내일 (수)", what: "영업시간 비 15mm", type: "rain", weekend: false },
-  { id: "r5",     label: "약한 비 5mm",    icon: "🌂", day: "내일 (목)", what: "영업시간 비 5mm",  type: "drizzle" },
-  { id: "heat",   label: "폭염 35℃",       icon: "🥵", day: "내일 (금)", what: "최고 35℃, 폭염",     type: "heat" },
-];
 
+// 2025년 춘천 ASOS 시간자료로 만든 하루 값: 최고기온(시간자료 기준), 영업시간(06~24시) 강수, 12~18시 강수, 밤(18~다음날 09시) 최저기온
+const DAYS = [
+  ["2025-07-21",32.3,0,0,24.4],["2025-07-22",33.0,0,0,22.2],["2025-07-23",33.6,0,0,23.2],["2025-07-24",34.5,0,0,23.0],
+  ["2025-07-25",36.5,0,0,23.6],["2025-07-26",36.3,0,0,24.1],["2025-07-27",36.4,0,0,24.1],["2025-07-28",36.3,0,0,23.6],
+  ["2025-07-29",36.9,0,0,24.7],["2025-07-30",35.2,0,0,25.5],["2025-07-31",33.5,0,0,24.3],["2025-08-01",35.2,0,0,24.4],
+  ["2025-08-02",34.8,0,0,24.3],["2025-08-03",32.3,1.4,0,21.8],["2025-08-04",32.9,0.3,0,25.1],["2025-08-05",33.3,0,0,24.7],
+  ["2025-08-06",26.7,66.4,19.5,22.5],["2025-08-07",32.1,0,0,21.4],["2025-08-08",32.2,0,0,23.2],["2025-08-09",26.6,0,0,19.0],
+  ["2025-08-10",32.7,0,0,21.8],["2025-08-11",28.6,0,0,21.8],["2025-08-12",33.7,0,0,23.3],["2025-08-13",24.1,65.1,26.9,22.5],
+  ["2025-08-14",28.3,18.5,0,22.9],["2025-08-15",32.3,0,0,22.9],["2025-08-16",32.6,0,0,22.5],["2025-08-17",30.8,0,0,23.9],
+].map(([d, tmax, rain, aft, nmin], i) => ({ d, tmax, rain, aft, nmin, i, date: new Date(d + "T00:00:00") }));
+const HOLI = { "2025-08-15": "광복절" };
+const TODAYS = [
+  { id: "2025-07-20", label: "7/20 (일)" },
+  { id: "2025-08-03", label: "8/3 (일)" },
+  { id: "2025-08-11", label: "8/11 (월)" },
+];
+const WD = ["일", "월", "화", "수", "목", "금", "토"];
+
+function evType(x) {
+  if (x.rain >= 10) return "rain";
+  if (x.rain >= 1) return "drizzle";
+  if (x.tmax >= 33) return "heat";
+  return "fine";
+}
+function weekTrend(x) {
+  const wk = DAYS.filter(y => Math.floor(y.i / 7) === Math.floor(x.i / 7));
+  if (wk.some(y => y.rain >= 10)) return "rain";
+  if (wk.filter(y => y.tmax >= 33).length >= 3) return "heat";
+  return "fine";
+}
+const ICON = { rain: "🌧️", drizzle: "🌦️", heat: "🥵", fine: "☀️" };
+function lead(x) { return Math.round((x.date - new Date(st.today + "T00:00:00")) / 86400000); }
+function tier(x) { const l = lead(x); return l <= 0 ? "past" : l <= 3 ? "t1" : l <= 10 ? "t2" : "t3"; }
+function md(x) { return `${x.date.getMonth() + 1}월 ${x.date.getDate()}일 (${WD[x.date.getDay()]})`; }
+
+// 1~3일 뒤: 당일 준비
 const ACTS = {
   rain: (ind, drop) => [
     { e: "🥬", t: `재료 준비량 ${Math.round(Math.abs(drop))}% 줄이기 검토`, d: "비 다음 날 매출이 돌아오지 않아, 남은 재료는 그대로 손실이 됩니다." },
@@ -252,58 +322,168 @@ const ACTS = {
     { e: "🧊", t: "무더위 쉼터 가게로 신청", d: "냉방비 일부 지원 + 쉼터 지도에 가게 노출 (아이디어)", btn: "신청" },
     { e: "👵", t: "어르신 손님 배려 안내", d: "60대 이상 유동인구가 많은 퇴계동은 그늘막 설치 우선 대상" },
   ],
+  fine: () => [
+    { e: "🙂", t: "평소처럼 준비하세요", d: "특별한 날씨 위험이 없어요." },
+  ],
+};
+// 4~10일 뒤: 미리 준비
+const PREP = {
+  rain: () => [
+    { e: "📦", t: "그날 재료·물품 발주량 조정", d: "비 예보가 굳어지면 발주를 줄이고, 아니면 평소대로." },
+    { e: "📣", t: "그날 예약 손님에게 레인체크 미리 안내", d: "\"비 오면 날짜를 바꾸고 할인 받으세요\" → 취소 대신 연기를 유도", btn: "안내" },
+    { e: "👥", t: "아르바이트 근무표 조정", d: "비 오는 시간대 인원을 줄이고 배달 인력으로 돌립니다." },
+  ],
+  drizzle: () => PREP.fine(),
+  heat: () => [
+    { e: "🏮", t: "저녁 야시장·행사 참여 신청 (마감 전)", d: "더운 낮 대신 저녁 손님을 받을 준비 (아이디어)", btn: "신청" },
+    { e: "🍧", t: "시원한 저녁 메뉴 준비", d: "소비가 저녁으로 옮겨가는 날에 맞춘 메뉴" },
+    { e: "👥", t: "근무 시간을 저녁 쪽으로 조정", d: "12~18시 인원을 줄이고 저녁에 배치" },
+  ],
+  fine: () => [
+    { e: "🙂", t: "특별히 준비할 것 없음", d: "예보가 바뀌면 다시 알려드려요." },
+  ],
+};
+// 11일 이후: 계획 (주 단위 경향)
+const PLAN = {
+  heat: () => [
+    { e: "🏮", t: "저녁 상권 행사·야시장 계획에 참여", d: "더운 주간에 맞춰 시와 함께 기획 (아이디어)", btn: "관심" },
+    { e: "❄️", t: "냉방기 점검·청소 예약", d: "더위가 시작되기 전에 미리" },
+    { e: "🕖", t: "저녁 영업시간 연장 계획 세우기", d: "더운 날 소비가 저녁으로 옮겨갑니다." },
+  ],
+  rain: () => [
+    { e: "🎟️", t: "레인체크 프로그램 참여 등록", d: "비 오는 날 못 온 손님에게 다음 방문 쿠폰 (시 프로그램 아이디어)", btn: "등록" },
+    { e: "🛵", t: "배달·포장 메뉴 미리 준비", d: "비 많은 주간을 대비" },
+    { e: "📅", t: "비 예상 주간 예약 변경 정책 정하기", d: "취소 대신 무료 날짜 변경을 받도록" },
+  ],
+  fine: () => [
+    { e: "🙂", t: "특별한 대비 필요 없음", d: "평년과 비슷한 날씨가 예상돼요." },
+  ],
 };
 
-let st = { ind: "cafe", wx: "r30sat" };
+let st = { ind: "cafe", today: "2025-07-20", sel: null };
 
-function chips(el, items, key, labelKey) {
+function chipRow(el, items, cur, labelKey, onPick) {
   el.innerHTML = "";
   items.forEach(it => {
     const b = document.createElement("button");
-    b.className = "chip" + (st[key] === it.id ? " on" : "");
+    b.className = "chip" + (cur === it.id ? " on" : "");
     b.textContent = it[labelKey];
-    b.onclick = () => { st[key] = it.id; renderOwner(); };
+    b.onclick = () => onPick(it.id);
     el.appendChild(b);
   });
 }
 
+function riskOf(x, ind) {
+  const t = evType(x);
+  if (t === "rain") {
+    const a = Math.abs(ind.rain);
+    return { t, drop: ind.rain, lvl: a >= 10 ? "높음" : a >= 5 ? "보통" : "낮음", cls: a >= 10 ? "high" : a >= 5 ? "mid" : "low" };
+  }
+  if (t === "drizzle") return { t, drop: -3, lvl: "낮음", cls: "low" };
+  if (t === "heat") return { t, drop: 0, lvl: "매출 영향 거의 없음 · 건강 주의", cls: "mid" };
+  return { t, drop: 0, lvl: "평소와 비슷", cls: "low" };
+}
+
 function renderOwner() {
   const ind = IND.find(x => x.id === st.ind);
-  const wx = WX.find(x => x.id === st.wx);
-  chips(document.getElementById("c-ind"), IND, "ind", "name");
-  chips(document.getElementById("c-wx"), WX, "wx", "label");
-
+  chipRow(document.getElementById("c-ind"), IND, st.ind, "name", id => { st.ind = id; renderOwner(); });
+  chipRow(document.getElementById("c-today"), TODAYS, st.today, "label", id => { st.today = id; st.sel = null; renderOwner(); });
   document.getElementById("o-ind-label").textContent = ind.name;
-  document.getElementById("o-icon").textContent = wx.icon;
-  document.getElementById("o-day").textContent = wx.day;
-  document.getElementById("o-what").textContent = wx.what;
 
-  let drop, lvl, cls, why, explain;
-  if (wx.type === "rain") {
-    drop = ind.rain;
-    const a = Math.abs(drop);
-    [lvl, cls] = a >= 10 ? ["높음", "high"] : a >= 5 ? ["보통", "mid"] : ["낮음", "low"];
-    why = `비슷한 비가 온 날, 춘천 ${ind.name} 매출은 평소보다 약 ${a}% 줄었어요.` +
-          (wx.weekend ? " 춘천은 토요일에 손님이 몰려서 주말 비가 더 아픕니다." : "");
-    explain = `<b>${ind.name}</b>은 영업시간 10mm 이상 비 오는 날 평균 <b>${drop}%</b> (보고서 6장, 업종군 회귀 결과).`;
-  } else if (wx.type === "drizzle") {
-    drop = -3; lvl = "낮음"; cls = "low";
-    why = "1~10mm 비는 매출을 약 3% 줄였어요.";
-    explain = "약한 비는 강도별 분석에서 <b>−3%</b> 수준.";
-  } else {
-    drop = 0; lvl = "매출 영향 거의 없음"; cls = "low";
-    why = "2025년 분석에서 폭염일 매출은 줄지 않았어요. 대신 손님과 직원 건강을 챙겨 주세요.";
-    explain = "폭염일 효과는 춘천 <b>+2.7%</b> (같은 주 덜 더운 날 대비). 매출 경보 대신 건강·운영 안내로 전환.";
+  // 기본 선택: 앞으로 10일 안의 첫 비 오는 날 → 첫 더운 날 → 내일
+  if (!st.sel || tier(DAYS.find(x => x.d === st.sel)) === "past") {
+    const fut = DAYS.filter(x => tier(x) !== "past");
+    const hit = fut.find(x => lead(x) <= 10 && evType(x) === "rain") || fut.find(x => lead(x) <= 10 && evType(x) === "heat");
+    st.sel = (hit || fut[0]).d;
   }
-  const r = document.getElementById("o-risk");
-  r.className = "risk " + cls;
+
+  // 달력
+  const t0 = new Date(st.today + "T00:00:00");
+  document.getElementById("o-cal-title").textContent =
+    `오늘 ${t0.getMonth() + 1}월 ${t0.getDate()}일 (${WD[t0.getDay()]}) · 앞으로 4주`;
+  const cal = document.getElementById("o-cal");
+  cal.innerHTML = ["월", "화", "수", "목", "금", "토", "일"].map(w => `<div class="wd">${w}</div>`).join("");
+  DAYS.forEach(x => {
+    const tr = tier(x);
+    const b = document.createElement("button");
+    let icon = "", dot = "";
+    if (tr === "t1" || tr === "t2") {
+      const r = riskOf(x, ind);
+      icon = ICON[r.t];
+      if (r.t === "rain") dot = r.cls; else if (r.t === "heat") dot = "heat";
+    } else if (tr === "t3") {
+      const w = weekTrend(x);
+      icon = ICON[w];
+      if (w === "heat") dot = "heat"; else if (w === "rain") dot = "mid";
+    }
+    b.className = `cell ${tr}` + (x.d === st.sel ? " sel" : "") + (x.date.getDay() === 6 ? " sat" : "") + (x.date.getDay() === 0 || HOLI[x.d] ? " sun" : "");
+    b.disabled = tr === "past";
+    b.innerHTML = `<span class="dn">${x.date.getDate()}</span><span class="ic">${icon}</span>${dot ? `<i class="dot ${dot}"></i>` : ""}`;
+    b.onclick = () => { st.sel = x.d; renderOwner(); };
+    cal.appendChild(b);
+  });
+
+  // 선택한 날 상세
+  const x = DAYS.find(y => y.d === st.sel);
+  const tr = tier(x), l = lead(x);
+  const tierName = { t1: "단기예보", t2: "중기예보", t3: "한 달 경향" }[tr];
+  document.getElementById("o-day").textContent = `${md(x)} · ${l}일 뒤 · ${tierName}` + (HOLI[x.d] ? ` · ${HOLI[x.d]}` : "");
+  const riskBox = document.getElementById("o-risk");
+  let icon, what, k, lvl, cls, why, acts, explain;
+
+  if (tr === "t1") {
+    const r = riskOf(x, ind);
+    icon = ICON[r.t];
+    what = `최고 ${x.tmax}℃ · 영업시간 비 ${x.rain}mm` + (x.nmin >= 25 ? " · 열대야" : "");
+    k = "매출 감소 위험"; lvl = r.lvl; cls = r.cls;
+    if (r.t === "rain") {
+      why = `비슷한 비가 온 날, 춘천 ${ind.name} 매출은 평소보다 약 ${Math.abs(ind.rain)}% 줄었어요.` +
+            (x.aft >= 5 ? " 비가 오후(12~18시)에 몰려 있어요. 오전·저녁 장사에 집중하세요." : "") +
+            (x.date.getDay() === 6 ? " 춘천은 토요일에 손님이 몰려서 주말 비가 더 아픕니다." : "");
+      explain = `<b>${ind.name}</b>은 영업시간 10mm 이상 비 오는 날 평균 <b>${ind.rain}%</b> (보고서 6장, 업종군 회귀 결과).`;
+    } else if (r.t === "drizzle") {
+      why = "1~10mm 비는 매출을 약 3% 줄였어요.";
+      explain = "약한 비는 강도별 분석에서 <b>−3%</b> 수준.";
+    } else if (r.t === "heat") {
+      why = "2025년 분석에서 폭염일 매출은 줄지 않았어요. 대신 손님과 직원 건강을 챙겨 주세요.";
+      explain = "폭염일 효과는 춘천 <b>+2.7%</b> (같은 주 덜 더운 날 대비). 매출 경보 대신 건강·운영 안내로 전환.";
+    } else {
+      why = "특별한 날씨 위험이 없어요.";
+      explain = "위험 날씨 없음.";
+    }
+    acts = ACTS[r.t](ind, r.drop);
+    if (r.t === "rain" && x.rain >= 50) acts = [{ e: "⚠️", t: "큰비 예보: 안전이 먼저예요", d: `영업시간 비 ${x.rain}mm. 무리해서 문을 열지 말고, 배달·조기 마감을 고려하세요. 손님을 밖으로 부르는 할인은 하지 않습니다.` }].concat(acts);
+    acts = { title: "오늘 해두면 좋은 일 (당일 준비)", list: acts };
+  } else if (tr === "t2") {
+    const r = riskOf(x, ind);
+    icon = ICON[r.t];
+    what = r.t === "rain" ? "비 올 가능성 높음" : r.t === "heat" ? `무더위 예상 (최고 ${Math.round(x.tmax)}℃ 안팎)` : "큰 날씨 위험 없음";
+    k = "미리 보기 (예보가 바뀔 수 있어요)"; lvl = r.lvl; cls = r.cls;
+    why = r.t === "rain" ? `예보대로 비가 오면 ${ind.name} 매출이 약 ${Math.abs(ind.rain)}% 줄 수 있어요. 지금은 미리 준비만 해두세요.`
+        : r.t === "heat" ? "더운 날은 손님이 저녁으로 옮겨가요. 저녁 장사를 미리 준비해 두세요."
+        : "아직 특별한 위험은 없어요.";
+    explain = "중기예보(4~10일)는 하루 단위로 비·기온 가능성만 알려줘요. 그래서 <b>발주·근무표·예약 안내</b>처럼 되돌릴 수 있는 준비를 합니다.";
+    acts = { title: "미리 해두면 좋은 일 (4~10일 전)", list: (PREP[r.t] || PREP.fine)() };
+  } else {
+    const w = weekTrend(x);
+    icon = ICON[w];
+    what = w === "rain" ? "이 주는 평년보다 비가 많을 가능성" : w === "heat" ? "이 주는 평년보다 더울 가능성 높음" : "특별한 경향 없음";
+    k = "한 달 경향 (날짜별 예보 아님)"; lvl = w === "heat" ? "더위 대비 계획" : w === "rain" ? "비 대비 계획" : "평년 수준"; cls = w === "fine" ? "low" : "mid";
+    why = "한 달 앞은 날짜별로 맞힐 수 없어서, 주 단위로 '평년보다 더울지·비가 많을지'만 보여줘요.";
+    explain = "1개월 전망은 주 단위 경향만 제공해요. 그래서 <b>야시장 신청·냉방 점검·배달 메뉴 준비</b>처럼 시간이 걸리는 계획을 세웁니다.";
+    acts = { title: "지금부터 계획할 일 (2주 이상 전)", list: PLAN[w]() };
+  }
+
+  document.getElementById("o-icon").textContent = icon;
+  document.getElementById("o-what").textContent = what;
+  riskBox.className = "risk " + cls;
+  document.getElementById("o-risk-k").textContent = k;
   document.getElementById("o-lvl").textContent = lvl;
   document.getElementById("o-why").textContent = why;
   document.getElementById("c-explain").innerHTML = explain;
 
-  const acts = ACTS[wx.type](ind, drop);
   const box = document.getElementById("o-acts");
-  box.innerHTML = "<h3>오늘 해두면 좋은 일</h3>" + acts.map((a, i) => `
+  box.innerHTML = `<h3>${acts.title}</h3>` + acts.list.map((a, i) => `
     <div class="act"><div class="e">${a.e}</div>
       <div><div class="t">${a.t}</div><div class="d">${a.d}</div></div>
       ${a.btn ? `<button data-i="${i}">${a.btn}</button>` : ""}
