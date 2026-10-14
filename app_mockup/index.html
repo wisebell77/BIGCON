@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>날씨 상권 레이더</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --ink: #1d2330; --muted: #6b7385; --line: #e3e6ec;
+    --accent: #2f6fde; --accent-soft: #e6eefc;
+    --high: #d64545; --high-soft: #fde8e8; --mid: #d9891f; --mid-soft: #fdf1df; --low: #2e9b62; --low-soft: #e2f5ea;
+    --phone: #11151d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #12151b; --card: #1b1f27; --ink: #e8ebf1; --muted: #9aa3b5; --line: #2c323d;
+      --accent: #6c9cf0; --accent-soft: #1f2d47;
+      --high: #f07070; --high-soft: #3a1f22; --mid: #f0aa4e; --mid-soft: #3a2c19; --low: #5cc98d; --low-soft: #183025;
+      --phone: #000;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; line-height: 1.5; }
+  header { padding: 20px 16px 8px; max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 0; font-size: 22px; }
+  .sub { color: var(--muted); font-size: 14px; margin-top: 4px; }
+  .notice { margin-top: 10px; font-size: 12px; color: var(--muted); background: var(--card); border: 1px dashed var(--line);
+    border-radius: 8px; padding: 8px 10px; }
+  .tabs { display: flex; gap: 8px; max-width: 1100px; margin: 12px auto 0; padding: 0 16px; }
+  .tab { border: 1px solid var(--line); background: var(--card); color: var(--ink); padding: 8px 14px; border-radius: 999px;
+    cursor: pointer; font-size: 14px; }
+  .tab.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  .view { display: none; } .view.on { display: block; }
+
+  /* ---------- 사장님 앱 ---------- */
+  .owner-wrap { display: grid; grid-template-columns: 360px 1fr; gap: 24px; align-items: start; }
+  @media (max-width: 820px) { .owner-wrap { grid-template-columns: 1fr; } }
+  .phone { background: var(--phone); border-radius: 36px; padding: 12px; max-width: 360px; margin: 0 auto; width: 100%; }
+  .screen { background: var(--bg); border-radius: 26px; min-height: 640px; overflow: hidden; display: flex; flex-direction: column; }
+  .statusbar { display: flex; justify-content: space-between; font-size: 12px; padding: 10px 18px 4px; color: var(--muted); }
+  .app-head { padding: 6px 18px 12px; }
+  .app-head .hello { font-size: 13px; color: var(--muted); }
+  .app-head .shop { font-size: 18px; font-weight: 700; }
+  .app-body { padding: 0 14px 14px; flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+  .forecast { display: flex; gap: 12px; align-items: center; }
+  .forecast .icon { font-size: 34px; }
+  .forecast .day { font-size: 12px; color: var(--muted); }
+  .forecast .what { font-weight: 700; }
+  .risk { border-radius: 14px; padding: 14px; }
+  .risk.high { background: var(--high-soft); color: var(--high); }
+  .risk.mid { background: var(--mid-soft); color: var(--mid); }
+  .risk.low { background: var(--low-soft); color: var(--low); }
+  .risk .lvl { font-size: 20px; font-weight: 800; }
+  .risk .why { font-size: 12px; color: var(--ink); opacity: .85; margin-top: 4px; }
+  .acts h3 { margin: 4px 2px 6px; font-size: 14px; }
+  .act { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--line); }
+  .act:first-of-type { border-top: 0; }
+  .act .e { font-size: 20px; }
+  .act .t { font-weight: 600; font-size: 14px; }
+  .act .d { font-size: 12px; color: var(--muted); }
+  .act button { margin-left: auto; border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+  .act button.done { background: var(--low-soft); color: var(--low); }
+  .nav { display: flex; justify-content: space-around; border-top: 1px solid var(--line); padding: 8px 0 12px; font-size: 11px;
+    color: var(--muted); background: var(--card); }
+
+  .controls h2, .gov h2 { font-size: 16px; margin: 0 0 8px; }
+  .ctl { margin-bottom: 14px; }
+  .ctl label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 999px; padding: 6px 12px;
+    font-size: 13px; cursor: pointer; }
+  .chip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .explain { font-size: 13px; color: var(--muted); }
+  .explain b { color: var(--ink); }
+  .flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; margin-top: 8px; }
+  .flow span.box { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px; }
+
+  /* ---------- 시청 대시보드 ---------- */
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 700px) { .kpis { grid-template-columns: 1fr; } }
+  .kpi .k { font-size: 12px; color: var(--muted); }
+  .kpi .v { font-size: 24px; font-weight: 800; }
+  .kpi .n { font-size: 12px; color: var(--muted); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 820px) { .grid2 { grid-template-columns: 1fr; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar-row { display: grid; grid-template-columns: 110px 1fr 70px; gap: 8px; align-items: center; font-size: 13px; margin: 6px 0; }
+  .bar { height: 14px; border-radius: 4px; background: var(--accent); }
+  .bar.alt { background: var(--mid); }
+  .bar-track { background: var(--line); border-radius: 4px; overflow: hidden; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .msg { font-size: 14px; }
+  .pill { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>☔ 날씨 상권 레이더 <span class="pill">시연용 목업</span></h1>
+  <div class="sub">기상 예보 → 상권별 위험 → 사장님 행동 카드 + 시청 지원 우선순위</div>
+  <div class="notice">
+    숫자는 팀 분석 보고서(「기본 분석 및 정의 제안」, 10/11) 결과를 옮긴 것입니다. 보고서에 값이 없는 칸은 "—"로 비워 두었습니다.
+    실제 모델이 돌아가는 화면이 아니라, 결과를 이런 식으로 보여줄 수 있다는 시연용입니다. 행동 카드 내용은 아이디어 초안이라 팀 논의가 필요합니다.
+  </div>
+</header>
+
+<div class="tabs">
+  <button class="tab on" data-view="owner">📱 사장님 앱</button>
+  <button class="tab" data-view="gov">🏛️ 춘천시 담당자 화면</button>
+</div>
+
+<main>
+  <!-- ================= 사장님 앱 ================= -->
+  <section class="view on" id="owner">
+    <div class="owner-wrap">
+      <div class="phone">
+        <div class="screen">
+          <div class="statusbar"><span>9:41</span><span>📶 🔋</span></div>
+          <div class="app-head">
+            <div class="hello">춘천 · <span id="o-ind-label">카페</span> 사장님, 안녕하세요</div>
+            <div class="shop">내일 장사 날씨 리포트</div>
+          </div>
+          <div class="app-body">
+            <div class="card forecast">
+              <div class="icon" id="o-icon">🌧️</div>
+              <div>
+                <div class="day" id="o-day">내일 (토)</div>
+                <div class="what" id="o-what">영업시간 비 30mm</div>
+              </div>
+            </div>
+            <div class="risk high" id="o-risk">
+              <div class="muted" style="color:inherit">매출 감소 위험</div>
+              <div class="lvl" id="o-lvl">높음</div>
+              <div class="why" id="o-why"></div>
+            </div>
+            <div class="card acts" id="o-acts"></div>
+          </div>
+          <div class="nav"><span>🏠 홈</span><span>📊 내 매출</span><span>🎁 지원</span><span>⚙️ 설정</span></div>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="card">
+          <h2>시연 조작판</h2>
+          <div class="ctl">
+            <label>업종 (춘천)</label>
+            <div class="chips" id="c-ind"></div>
+          </div>
+          <div class="ctl">
+            <label>내일 예보</label>
+            <div class="chips" id="c-wx"></div>
+          </div>
+          <div class="explain" id="c-explain"></div>
+          <div class="flow">
+            <span class="box">기상청 예보</span>→<span class="box">업종별 날씨 민감도 (회귀 분석)</span>→
+            <span class="box">위험 등급</span>→<span class="box">행동 카드</span>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h2>위험 등급 기준</h2>
+          <div class="explain">
+            예상 감소율 <b>10% 이상 = 높음</b>(코로나 재난지원금 매출 감소 기준과 같음), 5~10% = 보통, 5% 미만 = 낮음.<br>
+            폭염·열대야는 분석상 매출을 줄이지 않았기 때문에, 매출 경보 대신 <b>건강·운영 안내</b>를 보여줍니다.
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 시청 대시보드 ================= -->
+  <section class="view gov" id="gov">
+    <div class="card" style="margin-bottom:16px">
+      <h2>예보 시나리오</h2>
+      <div class="chips" id="g-sc"></div>
+    </div>
+
+    <div class="kpis" id="g-kpis"></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>지원 우선순위 (소상공인 중심 업종)</h2>
+        <div class="muted" style="margin-bottom:6px">점수 = 위험 확률(경보 모델) × 예상 손실액</div>
+        <div id="g-rank"></div>
+      </div>
+      <div class="card">
+        <h2 id="g-dong-title">손실이 몰리는 동네</h2>
+        <div id="g-dong"></div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>장기 시나리오: 7~12월 날씨 때문에 줄어드는 매출</h2>
+      <div class="legend"><span><i style="background:var(--accent)"></i>춘천</span><span><i style="background:var(--mid)"></i>강남</span></div>
+      <div id="g-long"></div>
+      <div class="muted" style="margin-top:8px">
+        더위는 늘어나는 추세지만 매출 손실은 거의 만들지 않고, 손실을 키우는 건 비 오는 날 수입니다.
+        ("폭염 +10일"은 2025년과 거의 같고, "호우 +5일"은 춘천 +40억, 강남 +102억)
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+// ---------- 데이터 (보고서 6장: 춘천, 영업시간 비 10mm+ 업종군 효과) ----------
+const IND = [
+  { id: "cafe",   name: "카페",          rain: -10 },
+  { id: "food",   name: "음식점",        rain: -9 },
+  { id: "stay",   name: "숙박",          rain: -14 },
+  { id: "fash",   name: "패션",          rain: -15 },
+  { id: "retail", name: "생활·기타소매", rain: -18 },
+];
+const WX = [
+  { id: "r30sat", label: "토요일 비 30mm", icon: "🌧️", day: "내일 (토)", what: "영업시간 비 30mm", type: "rain", weekend: true },
+  { id: "r15wd",  label: "평일 비 15mm",   icon: "🌦️", day: "내일 (수)", what: "영업시간 비 15mm", type: "rain", weekend: false },
+  { id: "r5",     label: "약한 비 5mm",    icon: "🌂", day: "내일 (목)", what: "영업시간 비 5mm",  type: "drizzle" },
+  { id: "heat",   label: "폭염 35℃",       icon: "🥵", day: "내일 (금)", what: "최고 35℃, 폭염",     type: "heat" },
+];
+
+const ACTS = {
+  rain: (ind, drop) => [
+    { e: "🥬", t: `재료 준비량 ${Math.round(Math.abs(drop))}% 줄이기 검토`, d: "비 다음 날 매출이 돌아오지 않아, 남은 재료는 그대로 손실이 됩니다." },
+    { e: "🛵", t: "배달·포장 할인 켜기", d: "가게에 오기 어려운 손님을 배달로 돌립니다." },
+    { e: "🎟️", t: "춘천시 우천 쿠폰 참여", d: "비 오는 날 사용하면 지역화폐 추가 적립 (아이디어)", btn: "참여" },
+    { e: "🛡️", t: "날씨 보험 자동 청구", d: "영업시간 비 20mm 이상이면 업종별 정액 지급 (시 단체가입 아이디어)", btn: "확인" },
+  ].concat(ind.id === "stay" || ind.id === "cafe"
+    ? [{ e: "🗺️", t: "비 오는 날 실내 관광 코스에 가게 등록", d: "관광객(외지인) 매출이 비 오는 날 −14.7%로 가장 크게 줄어듭니다.", btn: "등록" }]
+    : []),
+  drizzle: () => [
+    { e: "☂️", t: "평소처럼 준비하세요", d: "약한 비(1~10mm)는 매출을 3% 정도만 줄였습니다." },
+    { e: "🪧", t: "입구에 우산꽂이·빗물 매트", d: "작은 불편을 줄여 손님을 붙잡습니다." },
+  ],
+  heat: () => [
+    { e: "🕖", t: "낮(12~18시) 대신 저녁 영업 강화", d: "더운 날 낮 소비가 저녁으로 옮겨갔습니다." },
+    { e: "🧊", t: "무더위 쉼터 가게로 신청", d: "냉방비 일부 지원 + 쉼터 지도에 가게 노출 (아이디어)", btn: "신청" },
+    { e: "👵", t: "어르신 손님 배려 안내", d: "60대 이상 유동인구가 많은 퇴계동은 그늘막 설치 우선 대상" },
+  ],
+};
+
+let st = { ind: "cafe", wx: "r30sat" };
+
+function chips(el, items, key, labelKey) {
+  el.innerHTML = "";
+  items.forEach(it => {
+    const b = document.createElement("button");
+    b.className = "chip" + (st[key] === it.id ? " on" : "");
+    b.textContent = it[labelKey];
+    b.onclick = () => { st[key] = it.id; renderOwner(); };
+    el.appendChild(b);
+  });
+}
+
+function renderOwner() {
+  const ind = IND.find(x => x.id === st.ind);
+  const wx = WX.find(x => x.id === st.wx);
+  chips(document.getElementById("c-ind"), IND, "ind", "name");
+  chips(document.getElementById("c-wx"), WX, "wx", "label");
+
+  document.getElementById("o-ind-label").textContent = ind.name;
+  document.getElementById("o-icon").textContent = wx.icon;
+  document.getElementById("o-day").textContent = wx.day;
+  document.getElementById("o-what").textContent = wx.what;
+
+  let drop, lvl, cls, why, explain;
+  if (wx.type === "rain") {
+    drop = ind.rain;
+    const a = Math.abs(drop);
+    [lvl, cls] = a >= 10 ? ["높음", "high"] : a >= 5 ? ["보통", "mid"] : ["낮음", "low"];
+    why = `비슷한 비가 온 날, 춘천 ${ind.name} 매출은 평소보다 약 ${a}% 줄었어요.` +
+          (wx.weekend ? " 춘천은 토요일에 손님이 몰려서 주말 비가 더 아픕니다." : "");
+    explain = `<b>${ind.name}</b>은 영업시간 10mm 이상 비 오는 날 평균 <b>${drop}%</b> (보고서 6장, 업종군 회귀 결과).`;
+  } else if (wx.type === "drizzle") {
+    drop = -3; lvl = "낮음"; cls = "low";
+    why = "1~10mm 비는 매출을 약 3% 줄였어요.";
+    explain = "약한 비는 강도별 분석에서 <b>−3%</b> 수준.";
+  } else {
+    drop = 0; lvl = "매출 영향 거의 없음"; cls = "low";
+    why = "2025년 분석에서 폭염일 매출은 줄지 않았어요. 대신 손님과 직원 건강을 챙겨 주세요.";
+    explain = "폭염일 효과는 춘천 <b>+2.7%</b> (같은 주 덜 더운 날 대비). 매출 경보 대신 건강·운영 안내로 전환.";
+  }
+  const r = document.getElementById("o-risk");
+  r.className = "risk " + cls;
+  document.getElementById("o-lvl").textContent = lvl;
+  document.getElementById("o-why").textContent = why;
+  document.getElementById("c-explain").innerHTML = explain;
+
+  const acts = ACTS[wx.type](ind, drop);
+  const box = document.getElementById("o-acts");
+  box.innerHTML = "<h3>오늘 해두면 좋은 일</h3>" + acts.map((a, i) => `
+    <div class="act"><div class="e">${a.e}</div>
+      <div><div class="t">${a.t}</div><div class="d">${a.d}</div></div>
+      ${a.btn ? `<button data-i="${i}">${a.btn}</button>` : ""}
+    </div>`).join("");
+  box.querySelectorAll("button").forEach(b => b.onclick = () => { b.textContent = "완료 ✓"; b.classList.add("done"); });
+}
+
+// ---------- 시청 대시보드 (보고서 8C·9·10장) ----------
+const SC = [
+  {
+    id: "cc", label: "춘천 · 토요일 · 영업시간 비 30mm",
+    kpis: [
+      { k: "예상 매출 손실 (하루)", v: "9.7억 원", n: "대면소비 업종 합계" },
+      { k: "취약 업소 수 (춘천 전체)", v: "3,111곳", n: "취약·매우 취약 등급 업종" },
+      { k: "대응 유형", v: "손실 보전 + 사전 경보", n: "비 다음 날 반등 없음" },
+    ],
+    rank: [
+      { name: "기타요식", p: "0.64", loss: "7,900만 원" },
+      { name: "한식", p: "0.21", loss: "2억 원" },
+      { name: "일식", p: "—", loss: "—" },
+      { name: "스포츠/레저용품", p: "—", loss: "—" },
+      { name: "커피전문점", p: "—", loss: "—" },
+    ],
+    dongTitle: "비 오는 날 손실이 몰리는 동 (춘천)",
+    dong: [
+      { name: "퇴계동", txt: "하루 예상 손실 1.3억 원 (1위)", w: 100 },
+      { name: "동면", txt: "손실 상위 + 취약 업소 비율 29%", w: null },
+      { name: "석사동", txt: "손실 상위", w: null },
+      { name: "약사명동", txt: "취약 업소 비율 46% (가장 높음)", w: null },
+    ],
+    dongNote: "상위 3개 동이 춘천 손실의 약 35%. 동별 손실은 업소 수 비례로 나눈 추정값.",
+  },
+  {
+    id: "gn", label: "강남 · 수요일 · 폭염 36℃ + 열대야",
+    kpis: [
+      { k: "예상 매출 손실 (하루)", v: "거의 없음", n: "확인된 손실 없음 → 손실 보전 대상 없음" },
+      { k: "60대 이상 유동인구 (역삼1동)", v: "17만 명", n: "쉼터·그늘막 우선 위치" },
+      { k: "대응 유형", v: "건강·운영 지원", n: "쉼터, 영업시간 조정" },
+    ],
+    rank: null,
+    dongTitle: "폭염 대응 우선 동네",
+    dong: [
+      { name: "역삼1동 (강남)", txt: "60대 이상 유동인구 17만 명", w: 100 },
+      { name: "퇴계동 (춘천)", txt: "60대 이상 유동인구 6.5만 명", w: 38 },
+    ],
+    dongNote: "업소 좌표를 SK 50m 격자에 올려 동별 60대 이상 유동인구를 계산한 결과.",
+  },
+];
+const LONG = [
+  { name: "평년 (1991~2020)", cc: 138, gn: 261 },
+  { name: "최근 10년",        cc: 142, gn: 295 },
+  { name: "2025 실제",        cc: 171, gn: 480 },
+  { name: "추세 연장 2035",   cc: 156, gn: 325 },
+  { name: "폭염 +10일",       cc: 171, gn: 480 },
+  { name: "호우 +5일",        cc: 211, gn: 581 },
+];
+let gsc = "cc";
+
+function renderGov() {
+  const s = SC.find(x => x.id === gsc);
+  const sc = document.getElementById("g-sc");
+  sc.innerHTML = "";
+  SC.forEach(x => {
+    const b = document.createElement("button");
+    b.className = "chip" + (x.id === gsc ? " on" : "");
+    b.textContent = x.label;
+    b.onclick = () => { gsc = x.id; renderGov(); };
+    sc.appendChild(b);
+  });
+
+  document.getElementById("g-kpis").innerHTML = s.kpis.map(k =>
+    `<div class="card kpi"><div class="k">${k.k}</div><div class="v">${k.v}</div><div class="n">${k.n}</div></div>`).join("");
+
+  document.getElementById("g-rank").innerHTML = s.rank
+    ? `<table><tr><th>순위</th><th>업종</th><th class="num">위험 확률</th><th class="num">예상 손실</th></tr>` +
+      s.rank.map((r, i) => `<tr><td>${i + 1}</td><td>${r.name}</td><td class="num">${r.p}</td><td class="num">${r.loss}</td></tr>`).join("") +
+      `</table><div class="muted" style="margin-top:6px">"—"는 보고서에 순위만 있고 값이 없는 칸 (팀 모델 결과로 채울 예정)</div>`
+    : `<div class="msg">폭염·열대야는 2025년 강남·춘천에서 매출 손실이 확인되지 않아,<br><b>손실 보전형 지원 대상이 나오지 않습니다.</b><br><br>
+       → 대신 오른쪽 동네에 무더위 쉼터·그늘막을 먼저 두고, 12~18시 영업시간 조정을 안내합니다.</div>`;
+
+  document.getElementById("g-dong-title").textContent = s.dongTitle;
+  document.getElementById("g-dong").innerHTML = s.dong.map(d => `
+    <div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div style="font-weight:600;font-size:14px">${d.name}</div>
+      ${d.w ? `<div class="bar-track" style="margin:4px 0"><div class="bar" style="width:${d.w}%"></div></div>` : ""}
+      <div class="muted">${d.txt}</div>
+    </div>`).join("") + `<div class="muted" style="margin-top:8px">${s.dongNote}</div>`;
+
+  const max = Math.max(...LONG.map(l => l.gn));
+  document.getElementById("g-long").innerHTML = LONG.map(l => `
+    <div class="bar-row"><div>${l.name}</div>
+      <div><div class="bar-track"><div class="bar" style="width:${l.cc / max * 100}%"></div></div>
+           <div class="bar-track" style="margin-top:3px"><div class="bar alt" style="width:${l.gn / max * 100}%"></div></div></div>
+      <div class="num" style="font-size:12px">${l.cc}억<br>${l.gn}억</div></div>`).join("");
+}
+
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === t.dataset.view));
+});
+
+renderOwner();
+renderGov();
+</script>
+</body>
+</html>
