@@ -1,0 +1,8 @@
+# 빅콘 제공 데이터(신한카드·SKT·기상청)와 그 파생 표는 올리지 않음 → 팀 드라이브로 공유
+private/
+*.pkl
+# 원본 대용량 CSV (춘천 추출본 data/춘천_상가정보_202606.csv 는 예외로 올림)
+*.csv
+!golmok/data/*.csv
+!golmok/output/*.csv
+.DS_Store
