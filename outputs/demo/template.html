@@ -1,0 +1,231 @@
+<title>우천 손실 예보</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* 레이아웃: 상단 시나리오 패널(고정 폭 카드) + 아래로 결과 섹션이 한 열로 이어지는 운영 화면. 숫자는 모노스페이스 탭 정렬. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --ink: #1c2330; --ink2: #5b6472; --line: #dde2ea; --wash: #eef2f8;
+  --accent: #1f5fbf; --accent-soft: #d9e6fb; --rain: #2a6fdb; --warn: #d9822b; --crit: #c0392b; --ok: #3a8f5c;
+  --font-body: "Noto Sans KR", "Malgun Gothic", system-ui, sans-serif; --font-mono: "IBM Plex Mono", "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #141922; --surface: #1c2330; --ink: #eaeef5; --ink2: #a3adbd; --line: #2f3845; --wash: #222b38; --accent: #6ea0f0; --accent-soft: #24375a; --rain: #6ea0f0; --warn: #e9a252; --crit: #e06b5c; --ok: #6cc08b; color-scheme: dark } }
+:root[data-theme="dark"] { --bg: #141922; --surface: #1c2330; --ink: #eaeef5; --ink2: #a3adbd; --line: #2f3845; --wash: #222b38; --accent: #6ea0f0; --accent-soft: #24375a; --rain: #6ea0f0; --warn: #e9a252; --crit: #e06b5c; --ok: #6cc08b; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); margin: 0; padding-block: 20px 48px; padding-inline: 16px; line-height: 1.5 }
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px }
+header h1 { font-size: 1.6rem; margin: 0 0 4px; text-wrap: balance }
+header p { margin: 0; color: var(--ink2); max-width: 70ch }
+.eyebrow { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink2); font-weight: 500 }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 22px }
+.ctl label { display: block; font-size: .8rem; color: var(--ink2); margin-bottom: 4px }
+.seg { display: flex; flex-wrap: wrap; gap: 6px }
+.seg button { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 6px; padding: 5px 10px; font: inherit; font-size: .85rem; cursor: pointer }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff }
+.seg button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.slider { display: grid; grid-template-columns: 56px 1fr 60px; align-items: center; gap: 8px; font-size: .85rem }
+.slider input[type=range] { width: 100%; accent-color: var(--rain) }
+.slider .val { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px }
+.kpi { background: var(--wash); border-radius: 8px; padding: 12px 14px }
+.kpi .v { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 500; font-variant-numeric: tabular-nums; line-height: 1.2 }
+.kpi .l { font-size: .78rem; color: var(--ink2) }
+h2 { font-size: 1.05rem; margin: 0 0 10px }
+.sub { color: var(--ink2); font-size: .85rem; margin: 0 0 10px; max-width: 80ch }
+table { border-collapse: collapse; width: 100%; font-size: .85rem }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle }
+th { color: var(--ink2); font-weight: 500; font-size: .76rem; letter-spacing: .03em }
+td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums }
+.tablewrap { overflow-x: auto }
+.bar { height: 8px; background: var(--rain); border-radius: 3px; min-width: 2px }
+.barwrap { width: 140px; background: var(--wash); border-radius: 3px }
+.chip { display: inline-block; padding: 1px 7px; border-radius: 10px; font-size: .72rem; font-weight: 500; white-space: nowrap }
+.chip.v1 { background: #fde8d9; color: #9a4a0e } .chip.v2 { background: #f8d7d4; color: #8e2b22 } .chip.v0 { background: var(--wash); color: var(--ink2) }
+:root[data-theme="dark"] .chip.v1, :root:not([data-theme="light"]) .chip.v1 { background: #4a2d10; color: #f3c79a }
+:root[data-theme="dark"] .chip.v2, :root:not([data-theme="light"]) .chip.v2 { background: #4d1f1a; color: #f4b3ab }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .chip.v1 { background: #fde8d9; color: #9a4a0e } :root:not([data-theme="dark"]) .chip.v2 { background: #f8d7d4; color: #8e2b22 } }
+.alert { color: var(--crit); font-weight: 500 }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px }
+@media (max-width: 760px) { .two { grid-template-columns: 1fr } }
+svg { max-width: 100%; height: auto }
+.legend { font-size: .78rem; color: var(--ink2); display: flex; gap: 14px; flex-wrap: wrap; margin-top: 6px }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle }
+.note { font-size: .8rem; color: var(--ink2); line-height: 1.55 }
+.note li { margin-bottom: 4px }
+.rowline { display: grid; grid-template-columns: 88px 1fr 70px; gap: 8px; align-items: center; font-size: .82rem; padding: 3px 0 }
+.rowline .nm { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.rowline .num { font-family: var(--font-mono); text-align: right; font-variant-numeric: tabular-nums }
+.cal { display: flex; align-items: flex-end; gap: 3px; height: 120px; border-bottom: 1px solid var(--line); padding-bottom: 2px }
+.cal div { flex: 1; background: var(--rain); opacity: .85; border-radius: 2px 2px 0 0; position: relative; min-width: 4px }
+.cal div.peak { background: var(--accent); opacity: 1 }
+.calx { display: flex; gap: 3px; font-size: .66rem; color: var(--ink2); font-family: var(--font-mono) }
+.calx span { flex: 1; text-align: center; min-width: 4px; overflow: hidden }
+footer { font-size: .78rem; color: var(--ink2) }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">기상 위기 취약 상권 · 데모</div>
+    <h1>우천 손실 예보</h1>
+    <p>내일 예보를 넣으면 소상공인 업종별 예상 매출 손실, 업소 1곳당 금액, 경보 업종, 손실이 몰리는 동, 시즌 예산 캘린더가 나옵니다. 근거는 2025년 7~12월 신한카드 매출(강남구·춘천시)과 기상청 관측으로 추정한 업종별·시간대별 비 민감도입니다.</p>
+  </header>
+
+  <section class="panel">
+    <div class="eyebrow" style="margin-bottom:10px">시나리오</div>
+    <div class="controls">
+      <div class="ctl"><label>지역</label><div class="seg" id="regionSeg"></div></div>
+      <div class="ctl"><label>요일</label><div class="seg" id="dowSeg"></div></div>
+      <div class="ctl"><label>강수 프리셋</label><div class="seg" id="presetSeg"></div></div>
+      <div class="ctl">
+        <label>시간대별 영업시간 강수량(mm)</label>
+        <div class="slider"><span>06~12시</span><input type="range" id="rn0" min="0" max="60" step="1" value="4"><span class="val" id="rn0v">4</span></div>
+        <div class="slider"><span>12~18시</span><input type="range" id="rn1" min="0" max="60" step="1" value="6"><span class="val" id="rn1v">6</span></div>
+        <div class="slider"><span>18~24시</span><input type="range" id="rn2" min="0" max="60" step="1" value="4"><span class="val" id="rn2v">4</span></div>
+      </div>
+      <div class="ctl">
+        <label>더위</label>
+        <div class="slider"><span>최고기온</span><input type="range" id="tmax" min="24" max="39" step="0.5" value="29"><span class="val" id="tmaxv">29℃</span></div>
+        <div class="slider"><span>열대야</span><input type="checkbox" id="trop" style="justify-self:start"><span class="val" id="tropv">아니오</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="panel">
+    <h2>업종별 예상 손실과 경보</h2>
+    <p class="sub">예상 손실 = Σ<sub>시간대</sub> 그 요일·시간대의 평상 매출 × (1 − e<sup>β</sup>). β는 그 시간대 비가 5mm 이상일 때와 1~5mm일 때의 업종별 민감도(증거가 없는 업종은 0). 트리거는 2단계입니다. 영업시간 강수 10mm 이상이면 경보(정보·행동 안내), 20mm 이상이면 지급(손실 단가표). 업종별 경보 표시는 데모용 규칙으로 손실률 5% 이상이면서 손실이 100만 원 이상인 업종입니다(본 시스템은 분류 모델의 확률과 비용 기준 임계값을 씁니다).</p>
+    <div class="tablewrap"><table id="indTable"><thead><tr><th>업종</th><th>업종군</th><th>취약 등급</th><th class="num">업소 수</th><th class="num">예상 손실(백만)</th><th class="num">업소당(만원)</th><th class="num">손실률</th><th>경보</th><th></th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <div class="two">
+    <section class="panel">
+      <h2>손실이 몰리는 동</h2>
+      <p class="sub">시나리오 손실을 동별 호우 손실 비중(업소 수 비례 배분)으로 나눈 값. 원 크기 = 손실, 색 = 취약 등급 업소 비율.</p>
+      <div id="emdMap"></div>
+      <div class="legend"><span><i style="background:#9dbdf0"></i>취약 비율 낮음</span><span><i style="background:#1f5fbf"></i>높음</span></div>
+      <div id="emdList" style="margin-top:10px"></div>
+    </section>
+    <section class="panel">
+      <h2>2026년 7~12월 시즌 예산 캘린더</h2>
+      <p class="sub">주별 기대 손실(소상공인 업종, 억 원) = Σ<sub>날</sub> 기후학적 이벤트 확률 × 하루 손실. 색이 진한 주가 상위 8주입니다.</p>
+      <div class="cal" id="cal"></div>
+      <div class="calx" id="calx"></div>
+      <div id="calNote" class="note" style="margin-top:8px"></div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2>손실 단가표: 업소 1곳당 정액(만원)</h2>
+    <p class="sub">지수형 지원·보험 설계용 기대 손실표입니다(사업비·위험 마진이 없으니 보험 요율 자체는 아닙니다). 영업시간 강수 구간마다 2025년 관측 비의 시간대 분포를 적용해 계산한 업소 1곳의 하루 예상 손실입니다. 지급 트리거는 20mm 이상이고 10~20mm는 경보만 나갑니다. 시즌 기대 지급액은 2026년 7~12월에 20mm 트리거로 손실을 100% 보전할 때의 기대값(기후학적 비 확률 × 구간 확률 × 손실)입니다. 20mm 이상은 민감도가 시간대별 5mm 문턱형이라 20~40mm와 40mm+의 단가가 같습니다.</p>
+    <div class="tablewrap" style="margin-bottom:14px"><table id="trigTable"><thead><tr><th>지급 트리거</th><th class="num">기대 발동 일수(7~12월)</th><th class="num">2025년 실제 일수</th><th class="num">기대 지급액 100% 보전(억)</th><th class="num">50% 보전(억)</th></tr></thead><tbody></tbody></table></div>
+    <div class="tablewrap"><table id="rateTable"><thead><tr><th>업종</th><th>등급</th><th class="num">업소 수</th><th class="num">10~20mm 평일(경보)</th><th class="num">10~20mm 토(경보)</th><th class="num">20mm+ 평일(지급)</th><th class="num">20mm+ 토(지급)</th><th class="num">시즌 기대 지급액</th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="panel">
+    <h2>읽을 때 주의할 점</h2>
+    <ul class="note">
+      <li>민감도는 2025년 하반기 6개월 자료로 추정한 값입니다. 다른 해에도 같다는 보장은 없고, 매년 다시 추정해 요율표를 갱신하는 운영을 전제로 합니다.</li>
+      <li>폭염·열대야는 소상공인 업종 집계에서 평균 매출 손실이 확인되지 않았습니다. 더위 축을 올려도 손실이 거의 늘지 않는 것이 분석 결과이며, 더위 대책은 손실 보전이 아니라 건강·운영 지원으로 제안합니다.</li>
+      <li>동 단위 값은 측정값이 아니라 지역×업종 손실을 업소 수(또는 추정매출)로 나눈 배분값입니다.</li>
+      <li>경보 규칙은 데모용 단순 규칙입니다. 실제 알고리즘은 LightGBM 분류 확률과 놓침:헛경보 비용비로 정한 임계값을 씁니다.</li>
+      <li>손실 단가표는 기대 손실이지 보험 요율이 아닙니다. 지급 트리거 20mm, 보전율, 지역별 문턱 차등은 정책 선택이며, 수치는 10mm·20mm·40mm 세 가지를 모두 제공합니다.</li>
+    </ul>
+  </section>
+  <footer>2026 빅콘테스트 주제 1 · 기상 위기에 따른 취약 상권 영향 분석 · 데이터: 신한카드, SK 유동인구, 기상청 ASOS/AWS·단기예보, 소상공인시장진흥공단 상가정보, 서울 열린데이터광장</footer>
+</div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const DOWS = ["월", "화", "수", "목", "금", "토", "일"];
+  const PRESETS = {"비 없음": [0, 0, 0], "10mm(낮)": [2, 6, 2], "20mm(낮·저녁)": [3, 10, 7], "40mm(종일)": [10, 18, 12]};
+  const state = {region: "gangnam", dow: 5, rn: [2, 6, 2], tmax: 29, trop: false};
+  const $ = (id) => document.getElementById(id);
+  const fmt = (x, d = 0) => (x == null || isNaN(x)) ? "–" : x.toLocaleString("ko-KR", {maximumFractionDigits: d, minimumFractionDigits: d});
+
+  function lossOf(ind, dow, rn, tmax, trop) {
+    const b = ind.base[dow]; let loss = 0;
+    for (let i = 0; i < 3; i++) {
+      const beta = rn[i] >= 5 ? ind.beta.r5p[i] : (rn[i] >= 1 ? ind.beta.r1_5[i] : 0);
+      loss += (b[i] || 0) * (1 - Math.exp(Math.min(beta, 0)));
+    }
+    if (tmax >= 33) loss += (b[3] || 0) * (1 - Math.exp(Math.min(ind.beta.heat, 0)));
+    if (trop) loss += (b[3] || 0) * (1 - Math.exp(Math.min(ind.beta.tropical, 0)));
+    return {loss, base: b[3] || 0};
+  }
+  function gradeChip(g) {
+    if (g === "매우 취약") return '<span class="chip v2">매우 취약</span>';
+    if (g === "취약") return '<span class="chip v1">취약</span>';
+    return '<span class="chip v0">' + (g || "보통") + '</span>';
+  }
+  function seg(id, items, get, set) {
+    const el = $(id); el.innerHTML = "";
+    items.forEach(([key, label]) => {
+      const b = document.createElement("button"); b.type = "button"; b.textContent = label; b.id = id + "_" + key;
+      b.setAttribute("aria-pressed", String(get() === key));
+      b.addEventListener("click", () => { set(key); render(); });
+      el.appendChild(b);
+    });
+  }
+  function syncSliders() {
+    for (let i = 0; i < 3; i++) { $("rn" + i).value = state.rn[i]; $("rn" + i + "v").textContent = state.rn[i]; }
+    $("tmax").value = state.tmax; $("tmaxv").textContent = state.tmax + "℃"; $("trop").checked = state.trop; $("tropv").textContent = state.trop ? "예" : "아니오";
+  }
+  function render() {
+    const R = D.regions[state.region];
+    seg("regionSeg", Object.keys(D.regions).map(k => [k, D.regions[k].name]), () => state.region, (k) => { state.region = k; });
+    seg("dowSeg", DOWS.map((d, i) => [i, d]), () => state.dow, (k) => { state.dow = Number(k); });
+    const presetKey = Object.keys(PRESETS).find(k => PRESETS[k].join() === state.rn.join()) || "직접";
+    seg("presetSeg", Object.keys(PRESETS).map(k => [k, k]), () => presetKey, (k) => { state.rn = PRESETS[k].slice(); syncSliders(); });
+    syncSliders();
+    const rows = R.industries.map(ind => { const r = lossOf(ind, state.dow, state.rn, state.tmax, state.trop); const rate = r.base > 0 ? r.loss / r.base : 0;
+      return {...ind, loss: r.loss, base: r.base, rate, per: ind.n_stores ? r.loss / ind.n_stores / 1e4 : null, alert: rate >= 0.05 && r.loss >= 1e6}; })
+      .sort((a, b) => b.loss - a.loss);
+    const total = rows.reduce((s, r) => s + r.loss, 0), baseTot = rows.reduce((s, r) => s + r.base, 0);
+    const stores = rows.reduce((s, r) => s + (r.n_stores || 0), 0), nAlert = rows.filter(r => r.alert).length;
+    const rainTot = state.rn.reduce((a, b) => a + b, 0);
+    const trig = rainTot >= 20 ? "지급 발동" : (rainTot >= 10 ? "경보만" : "없음");
+    $("kpis").innerHTML = [
+      ["소상공인 예상 손실", fmt(total / 1e8, 2) + "억 원", R.name + " · " + DOWS[state.dow] + "요일 · 영업시간 비 " + rainTot + "mm" + (state.tmax >= 33 ? " · 폭염" : "") + (state.trop ? " · 열대야" : "")],
+      ["평상 매출 대비", fmt(baseTot > 0 ? total / baseTot * 100 : 0, 1) + "%", "요일 평상 매출 " + fmt(baseTot / 1e8, 0) + "억 원 기준"],
+      ["업소 1곳당 평균", fmt(stores ? total / stores / 1e4 : 0, 1) + "만 원", "매핑된 업소 " + fmt(stores) + "개"],
+      ["경보 업종", nAlert + "개 / " + rows.length + "개", "손실률 5% 이상 · 손실 100만 원 이상"],
+      ["트리거", trig, "경보 10mm · 지급 20mm (영업시간 강수 합계)"],
+    ].map(([l, v, s]) => '<div class="kpi"><div class="l">' + l + '</div><div class="v">' + v + '</div><div class="l">' + s + '</div></div>').join("");
+    $("trigTable").querySelector("tbody").innerHTML = (D.trigger_options || []).filter(o => o.region === state.region).map(o => '<tr><td>' + o["지급 트리거"] + (o["지급 트리거"] === "20mm 이상" ? ' <span class="chip v0">제안</span>' : '') + '</td><td class="num">' + fmt(o["기대 발동 일수(7~12월)"], 0) + '</td><td class="num">' + fmt(o["2025년 실제 해당 일수"]) + '</td><td class="num">' + fmt(o["기대 지급액 100% 보전(억)"], 0) + '</td><td class="num">' + fmt(o["기대 지급액 50% 보전(억)"], 0) + '</td></tr>').join("");
+    const maxLoss = rows[0] ? rows[0].loss : 1;
+    $("indTable").querySelector("tbody").innerHTML = rows.map(r => '<tr><td>' + r.industry + '</td><td>' + r.group + '</td><td>' + gradeChip(r.grade) + '</td><td class="num">' + fmt(r.n_stores) + '</td><td class="num">' + fmt(r.loss / 1e6, 1) + '</td><td class="num">' + fmt(r.per, 1) + '</td><td class="num">' + fmt(r.rate * 100, 1) + '%</td><td>' + (r.alert ? '<span class="alert">경보</span>' : '') + '</td><td><div class="barwrap"><div class="bar" style="width:' + Math.max(2, r.loss / maxLoss * 100) + '%"></div></div></td></tr>').join("");
+    // 동 배분
+    const emd = R.emd.slice().sort((a, b) => b.rain_loss_day - a.rain_loss_day);
+    const emdTot = emd.reduce((s, e) => s + e.rain_loss_day, 0) || 1;
+    const xs = emd.map(e => e.cx), ys = emd.map(e => e.cy);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const W = 520, H = 330, pad = 36, sx = (x) => pad + (x - x0) / Math.max(x1 - x0, 1) * (W - 2 * pad), sy = (y) => H - pad - (y - y0) / Math.max(y1 - y0, 1) * (H - 2 * pad);
+    const maxShare = Math.max(...emd.map(e => e.vuln_share), 0.01), maxAlloc = emd[0] ? emd[0].rain_loss_day / emdTot * total : 1;
+    const col = (s) => { const t = Math.min(s / Math.max(maxShare, .3), 1); const c1 = [157, 189, 240], c2 = [31, 95, 191]; return "rgb(" + c1.map((v, i) => Math.round(v + (c2[i] - v) * t)).join(",") + ")"; };
+    $("emdMap").innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="동별 손실 지도">' +
+      emd.map(e => { const a = e.rain_loss_day / emdTot * total; const rr = 4 + 26 * Math.sqrt(a / Math.max(maxAlloc, 1)); return '<circle cx="' + sx(e.cx).toFixed(1) + '" cy="' + sy(e.cy).toFixed(1) + '" r="' + rr.toFixed(1) + '" fill="' + col(e.vuln_share) + '" fill-opacity="0.85" stroke="var(--surface)" stroke-width="1.2"></circle>'; }).join("") +
+      emd.slice(0, 6).map(e => '<text x="' + sx(e.cx).toFixed(1) + '" y="' + (sy(e.cy) - 4 - 26 * Math.sqrt((e.rain_loss_day / emdTot * total) / Math.max(maxAlloc, 1))).toFixed(1) + '" font-size="11" text-anchor="middle" fill="var(--ink)">' + e.name + '</text>').join("") + '</svg>';
+    $("emdList").innerHTML = emd.slice(0, 8).map(e => { const a = e.rain_loss_day / emdTot * total; return '<div class="rowline"><span class="nm">' + e.name + '</span><div class="barwrap" style="width:100%"><div class="bar" style="width:' + Math.max(2, a / Math.max(maxAlloc, 1) * 100) + '%;background:' + col(e.vuln_share) + '"></div></div><span class="num">' + fmt(a / 1e6, 0) + '백만</span></div>'; }).join("");
+    // 캘린더
+    const cal = R.calendar; const maxW = Math.max(...cal.map(c => c.loss), 0.01);
+    const top8 = cal.slice().sort((a, b) => b.loss - a.loss).slice(0, 8).map(c => c.week);
+    $("cal").innerHTML = cal.map(c => '<div class="' + (top8.includes(c.week) ? "peak" : "") + '" style="height:' + Math.max(2, c.loss / maxW * 100) + '%" title="' + c.week + ' 주: ' + fmt(c.loss, 1) + '억, 비 확률 ' + fmt(c.p_rain * 100, 0) + '%"></div>').join("");
+    $("calx").innerHTML = cal.map((c, i) => '<span>' + (i % 4 === 0 ? c.week : "") + '</span>').join("");
+    const calTot = cal.reduce((s, c) => s + c.loss, 0), top8Sum = cal.filter(c => top8.includes(c.week)).reduce((s, c) => s + c.loss, 0);
+    const peakWeeks = cal.filter(c => top8.includes(c.week)).map(c => c.week);
+    $("calNote").textContent = R.name + " 시즌 기대 손실 " + fmt(calTot, 0) + "억 원. 상위 8주(" + peakWeeks[0] + "~" + peakWeeks[peakWeeks.length - 1] + " 사이)가 " + fmt(top8Sum / calTot * 100, 0) + "%를 차지해 지원 예산과 인력을 이 기간에 먼저 배치합니다.";
+    // 요율표
+    const prof = {}; D.band_profile.forEach(b => { prof[b.band] = [b.rn_06_11, b.rn_12_17, b.rn_18_23]; });
+    const avgWk = (ind, rn) => { let s = 0; for (let d = 0; d < 5; d++) s += lossOf(ind, d, rn, 25, false).loss; return s / 5; };
+    const rate = R.industries.map(ind => ({ind, a: avgWk(ind, prof["10~20mm"]), b: lossOf(ind, 5, prof["10~20mm"], 25, false).loss, c: avgWk(ind, prof["20~40mm"]), d: lossOf(ind, 5, prof["20~40mm"], 25, false).loss}))
+      .filter(r => r.ind.n_stores).sort((x, y) => (y.ind.premium20_per_store_만원 || 0) - (x.ind.premium20_per_store_만원 || 0));
+    $("rateTable").querySelector("tbody").innerHTML = rate.map(r => { const n = r.ind.n_stores; return '<tr><td>' + r.ind.industry + '</td><td>' + gradeChip(r.ind.grade) + '</td><td class="num">' + fmt(n) + '</td><td class="num">' + fmt(r.a / n / 1e4, 1) + '</td><td class="num">' + fmt(r.b / n / 1e4, 1) + '</td><td class="num">' + fmt(r.c / n / 1e4, 1) + '</td><td class="num">' + fmt(r.d / n / 1e4, 1) + '</td><td class="num">' + fmt(r.ind.premium20_per_store_만원, 0) + '</td></tr>'; }).join("");
+  }
+  ["rn0", "rn1", "rn2"].forEach((id, i) => $(id).addEventListener("input", () => { state.rn[i] = Number($(id).value); render(); }));
+  $("tmax").addEventListener("input", () => { state.tmax = Number($("tmax").value); render(); });
+  $("trop").addEventListener("change", () => { state.trop = $("trop").checked; render(); });
+  render();
+})();
+</script>

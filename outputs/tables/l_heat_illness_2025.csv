@@ -1,0 +1,11 @@
+﻿region,bin,일수,하루_평균_환자,지역
+chuncheon,28℃ 미만,51,0.2,춘천
+chuncheon,28~31,23,0.96,춘천
+chuncheon,31~33,27,1.56,춘천
+chuncheon,33~35,20,1.75,춘천
+chuncheon,35℃+,10,6.1,춘천
+gangnam,28℃ 미만,45,0.71,강남
+gangnam,28~31,35,1.2,강남
+gangnam,31~33,27,2.37,강남
+gangnam,33~35,14,4.0,강남
+gangnam,35℃+,13,14.15,강남

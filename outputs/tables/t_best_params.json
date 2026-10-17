@@ -1,0 +1,36 @@
+{
+  "reg": {
+    "num_leaves": 31,
+    "learning_rate": 0.03,
+    "n_estimators": 500,
+    "min_child_samples": 50,
+    "colsample_bytree": 0.8,
+    "subsample": 0.8,
+    "reg_lambda": 2.0,
+    "min_split_gain": 0.0
+  },
+  "cls": {
+    "num_leaves": 7,
+    "learning_rate": 0.05,
+    "n_estimators": 400,
+    "min_child_samples": 30,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 5.0,
+    "scale_pos_weight": 1.0,
+    "min_split_gain": 0.0
+  },
+  "cls_threshold_3to1": 0.21,
+  "cls_feat": "base",
+  "reg_feat": "exp",
+  "index": {
+    "w_s": 0.5,
+    "w_e": 0.25,
+    "w_a": 0.25,
+    "geometric": true,
+    "winsor": 0.95,
+    "evid_p": 0.1,
+    "evid_z": -1.96,
+    "cut_vuln": 0.75,
+    "cut_very": 0.9
+  }
+}

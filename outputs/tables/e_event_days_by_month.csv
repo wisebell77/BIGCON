@@ -1,0 +1,13 @@
+﻿region,month,heat_day,heat35_day,heat_feels33,tropical,rain_biz10,rain_biz20,rain_1h20,rain_adv,rain_dawn_only,cold12
+chuncheon,7,17,9,12,3,5,3,2,1,0,0
+chuncheon,8,13,2,7,3,4,2,2,0,0,0
+chuncheon,9,0,0,0,0,8,5,3,0,0,0
+chuncheon,10,0,0,0,0,4,3,0,0,0,0
+chuncheon,11,0,0,0,0,0,0,0,0,0,0
+chuncheon,12,0,0,0,0,0,0,0,0,0,3
+gangnam,7,15,11,17,23,3,2,1,0,1,0
+gangnam,8,9,2,13,20,3,1,1,0,0,0
+gangnam,9,1,0,0,2,8,2,1,0,1,0
+gangnam,10,0,0,0,0,3,2,0,0,0,0
+gangnam,11,0,0,0,0,0,0,0,0,0,0
+gangnam,12,0,0,0,0,0,0,0,0,0,0
