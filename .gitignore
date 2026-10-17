@@ -2,3 +2,11 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+
+# 공모전 제공 데이터와 그 파생 파일은 저장소에 올리지 않는다
+신한카드_데이터_레이아웃/
+sk통신인구_데이터_레이아웃/
+data/processed/card*.parquet
+data/processed/sk_*.parquet
+data/processed/model_panel_*.parquet
+data/processed/industry_profile.parquet
