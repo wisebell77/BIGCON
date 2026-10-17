@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>강남·춘천 상권 지도</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
@@ -70,12 +71,14 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
 <div class="wrap">
   <header>
     <h1>강남·춘천 상권 지도</h1>
-    <p>상권 구역 위에 마우스를 올리면 점포 수·면적·매출·유동인구·우리 분석의 호우 손실 추정이 뜹니다. 강남은 서울시 상권분석서비스의 공식 상권(골목·발달·전통시장·관광특구)이고, 춘천은 공식 상권 자료가 없어 상가정보 좌표로 찾은 밀집 구역과 지정 골목형상점가·전통시장·관광지를 보여 줍니다. 중요도 축(규모·취약도·회복력)을 고르면 그 기준의 상위 구역이 지도와 오른쪽 목록에 번호로 표시됩니다. 휠로 확대·축소, 끌어서 이동할 수 있어요.</p>
+    <p>상권 구역 위에 마우스를 올리면 점포 수·면적·매출·유동인구·우리 분석의 호우 손실 추정이 뜹니다. 강남은 서울시 상권분석서비스의 공식 상권(골목·발달·전통시장·관광특구)이고, 춘천은 공식 상권 자료가 없어 상가정보 좌표로 찾은 밀집 구역과 지정 골목형상점가·전통시장·관광지를 보여 줍니다. 밀집 구역은 같은 2천㎡를 원으로 센 것(원형 창)과 길 방향 직사각형으로 센 것(길 따라 창) 두 가지를 버튼으로 바꿔 볼 수 있습니다. 중요도 축(규모·취약도·회복력)을 고르면 그 기준의 상위 구역이 지도와 오른쪽 목록에 번호로 표시됩니다. 휠로 확대·축소, 끌어서 이동할 수 있어요.</p>
   </header>
 
   <div class="bar">
     <div class="seg" id="regionSeg"></div>
     <div class="seg" id="layerSeg"></div>
+    <span class="lbl">밀집 후보 창</span>
+    <div class="seg" id="candSeg"></div>
     <span class="lbl">색 기준</span>
     <select id="metric"></select>
     <input id="q" type="search" placeholder="상권 이름 검색">
@@ -116,7 +119,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
       <li>강남 공식 상권의 매출·점포·유동인구는 서울시 상권분석서비스(서울신용보증재단, 내국인 매출은 신한카드 기반) 값입니다. 매출은 2025년 3·4분기 합계, 점포 수는 2025년 4분기, 유동인구는 2025년 3·4분기 평균의 분기 합계(길단위 추정)입니다.</li>
       <li>강남 공식 상권의 "호우일 하루 손실"은 서울시 업종별 매출에 우리 카드 분석의 업종별 호우 민감도를 곱한 값(측정 매출 기반)이고, 괄호의 배분값은 상가정보 업소 수 × 업종 단가입니다. 두 값의 상관은 0.93입니다. 밀집 후보와 춘천은 배분값만 있습니다.</li>
       <li>손실률이 높은 상위에는 매출이 아주 작은 상권이 섞이기 쉬워 기본으로 점포 30개 미만은 제외합니다. 체크를 풀면 전부 보입니다.</li>
-      <li>춘천 밀집 구역은 "2천㎡ 안 15개 이상"(춘천시 완화 기준) 밀도로 찾은 후보이고 공식 지정 구역이 아닙니다. 지역화폐 가맹 비율은 춘천사랑상품권 가맹점을 상호명·도로명 번지로 상가정보에 맞춘 추정(전체 매칭률 33%)이라 상대 비교용입니다. 읍면동 매출 구간은 춘천시 상권 매출현황(2023년 7월, 구간값)입니다.</li>
+      <li>밀집 구역은 상가정보 좌표의 밀도("2천㎡ 안 N개 이상", 강남은 법정 30개, 춘천은 춘천시 완화 기준 15개)로 찾은 후보이고 공식 지정 구역이 아닙니다. '원형 창'은 반경 25.2m 원으로, '길 따라 창'은 업소가 늘어선 방향으로 돌린 2천㎡ 직사각형(100×20·80×25·63×32m 중 최댓값)으로 셉니다. 길 따라 창이 지정 골목형상점가 업소를 더 잘 잡아(강원대 후문 37→72%, 뒤뜰 16→70%, 강남 공식 골목상권 안 업소 41→58%) 기본값입니다. 구역 외곽선은 업소 주변 18m를 이은 선이고 면적도 그 기준입니다. 지역화폐 가맹 비율은 춘천사랑상품권 가맹점을 상호명·도로명 번지로 상가정보에 맞춘 추정(전체 매칭률 33%)이라 상대 비교용입니다. 읍면동 매출 구간은 춘천시 상권 매출현황(2023년 7월, 구간값)입니다.</li>
     </ul>
   </section>
 </div>
@@ -141,11 +144,13 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
   };
   const AXES = { scale: { label: "규모", inds: ["loss", "pay20", "sales", "stores"] }, vuln: { label: "취약도", inds: ["loss_rate", "vuln_share", "food", "weekend"] }, resil: { label: "회복력(약할수록 상위)", inds: ["close_rate", "oper", "change_ord", "voucher"] } };
   const METRICS = { none: { label: "구분(색 없음)" }, loss: { label: "호우일 하루 손실" }, sales: { label: "2025 하반기 매출" }, stores: { label: "점포 수" }, loss_rate: { label: "호우일 손실률" }, vuln_share: { label: "취약 등급 업소 비율" }, pay20: { label: "20mm 시즌 기대 지급액" } };
-  const state = { region: "gangnam", layers: { official: true, cand: true, markets: true, alley: true, tourist: true, bg: true, emd: true }, metric: "none", sel: null, q: "", axis: null, ind: { scale: "loss", vuln: "loss_rate", resil: "close_rate" }, topN: 5, minSize: true };
+  const state = { region: "gangnam", cand: D.cand_default || "rect", layers: { official: true, cand: true, markets: true, alley: true, tourist: true, bg: true, emd: true }, metric: "none", sel: null, q: "", axis: null, ind: { scale: "loss", vuln: "loss_rate", resil: "close_rate" }, topN: 5, minSize: true };
   const svg = $("map"), tip = $("tip");
   const W = 1000, H = 640;
   let view = { x: 0, y: 0, w: W, h: H }, proj = null, items = [], highlight = [], sort = { key: null, asc: false };
 
+  const cands = (R) => (R.candidates && R.candidates[state.cand]) || [];
+  const candLabel = () => (D.cand_methods && D.cand_methods[state.cand]) ? D.cand_methods[state.cand].label : "";
   function unify(o, kind) {
     const u = { ...o, kind };
     if (kind === "official") {
@@ -154,14 +159,14 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
       u.close_rate = o["close_rate_%"]; u.oper = o.oper_months; u.change_ord = o.change_ord; u.voucher = null; u.vuln = o["취약 등급 업소"]; u.id = "o" + o.code;
     } else if (kind === "cand") {
       u.loss = o.rain_loss_만원; u.loss_alloc = o.rain_loss_만원; u.pay20 = o.pay20_만원; u.sales = null; u.stores = o.n_stores; u.loss_rate = o["loss_rate_%"]; u.vuln_share = o["vuln_share_%"]; u.food = o.food_share == null ? null : o.food_share * 100; u.weekend = null;
-      u.close_rate = null; u.oper = null; u.change_ord = null; u.voucher = o["voucher_share_%"]; u.vuln = o.vuln_stores; u.id = "c" + o.id;
+      u.close_rate = null; u.oper = null; u.change_ord = null; u.voucher = o["voucher_share_%"]; u.vuln = o.vuln_stores; u.id = "c" + o.method + o.id;
     } else { u.id = kind + ":" + o.name; }
     return u;
   }
   function makeProj(R) {
     const pts = [];
     R.official.forEach(o => o.rings.forEach(r => r.forEach(p => pts.push(p))));
-    R.candidates.forEach(o => o.rings.forEach(r => r.forEach(p => pts.push(p))));
+    Object.values(R.candidates).flat().forEach(o => o.rings.forEach(r => r.forEach(p => pts.push(p))));
     R.markets.forEach(m => pts.push([m.lon, m.lat])); R.alley_official.forEach(m => pts.push([m.lon, m.lat]));
     const lons = pts.map(p => p[0]), lats = pts.map(p => p[1]);
     const lon0 = (Math.min(...lons) + Math.max(...lons)) / 2, lat0 = (Math.min(...lats) + Math.max(...lats)) / 2;
@@ -199,7 +204,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
   function val(o, k) { const m = IND[k]; const v = o[k]; if (v == null) return "–"; return m.text ? m.text(v) : fmt(v, m.d) + (m.unit ? " " + m.unit : ""); }
   function tipHtml(o) {
     if (o.kind === "official") return `<b>${o.name}</b> <span class="k">${o.type} · ${o.emd}</span><br>면적 ${fmt(o.area_m2)}㎡ · 서울시 점포 ${fmt(o.stores_seoul)}개 · 상가정보 업소 ${fmt(o["업소 수(상가정보)"])}개<br>2025 하반기 매출 ${fmt(o.sales, 0)}억 (전년 대비 ${o["sales_h2_yoy_%"] == null ? "–" : (o["sales_h2_yoy_%"] > 0 ? "+" : "") + fmt(o["sales_h2_yoy_%"], 1) + "%"}) · 점포당 하루 ${fmt(o.sales_per_store_만원, 0)}만원<br>분기 유동인구 ${fmt(o.flpop_q)} · 변화지표 ${o.change_ix || "–"} · 분기 폐업률 ${fmt(o.close_rate, 2)}%<br><span class="k">호우일 하루 손실</span> ${fmt(o.loss, 0)}만원 (배분값 ${fmt(o.loss_alloc, 0)}) · 손실률 ${fmt(o.loss_rate, 2)}% · 취약 등급 업소 ${fmt(o.vuln)}개<br><span class="k">클릭하면 상세</span>`;
-    if (o.kind === "cand") return `<b>${o.name}</b> <span class="k">${o.emd}</span><br>업소 ${fmt(o.n_stores)}개(매핑 ${fmt(o.mapped)}) · 면적 약 ${fmt(o.area_m2)}㎡ · 음식 비중 ${fmt(o.food, 0)}%<br>호우일 하루 손실 ${fmt(o.loss, 0)}만원 · 20mm 시즌 지급 ${fmt(o.pay20, 0)}만원 · 손실률 ${fmt(o.loss_rate, 1)}%<br>취약 등급 업소 ${fmt(o.vuln)}개(${fmt(o.vuln_share, 0)}%)${o.voucher != null ? " · 지역화폐 가맹 " + fmt(o.voucher, 0) + "%" : ""}<br>${o.top}${o.emd_sales_2023 ? "<br><span class='k'>읍면동 매출 구간(2023.7):</span> " + o.emd_sales_2023 : ""}`;
+    if (o.kind === "cand") return `<b>${o.name}</b> <span class="k">${o.emd} · ${o.method_label}</span><br>업소 ${fmt(o.n_stores)}개(매핑 ${fmt(o.mapped)}) · 면적 약 ${fmt(o.area_m2)}㎡ · 음식 비중 ${fmt(o.food, 0)}%<br>호우일 하루 손실 ${fmt(o.loss, 0)}만원 · 20mm 시즌 지급 ${fmt(o.pay20, 0)}만원 · 손실률 ${fmt(o.loss_rate, 1)}%<br>취약 등급 업소 ${fmt(o.vuln)}개(${fmt(o.vuln_share, 0)}%)${o.voucher != null ? " · 지역화폐 가맹 " + fmt(o.voucher, 0) + "%" : ""}<br>${o.top}${o.emd_sales_2023 ? "<br><span class='k'>읍면동 매출 구간(2023.7):</span> " + o.emd_sales_2023 : ""}`;
     if (o.kind === "market") return `<b>${o.name}</b> <span class="k">전통시장 · ${o.type}</span><br>점포 ${fmt(o.stores)}개 · ${o.items || ""}<br><span class="k">${o.addr}</span>`;
     if (o.kind === "alley") return `<b>${o.name}</b> <span class="k">지정 골목형상점가</span><br>점포 ${fmt(o.stores)}개 · ${o.items || ""}<br><span class="k">${o.addr} (대표점: 주소 매칭 업소 ${o.geocode_n}개 평균)</span>`;
     if (o.kind === "tourist") return `<b>${o.name}</b> <span class="k">${o.type}</span><br><span class="k">${o.addr}</span>`;
@@ -210,7 +215,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
     const sec = (t) => `<span class="sec">${t}</span>`;
     const ranks = () => { const parts = []; for (const a of Object.keys(AXES)) { const k = state.ind[a]; const set = rankBy(k, IND[k].dir); const i = set.findIndex(x => x.id === o.id); parts.push(row(`${AXES[a].label} 순위 (${IND[k].label.split("(")[0]})`, i >= 0 ? `${i + 1} / ${set.length}` : "–")); } return sec("중요도 순위(현재 지표 기준)") + parts.join(""); };
     if (o.kind === "official") return `<h2>${o.name}</h2><p class="sub">${o.type} · ${o.emd} · 상권 코드 ${o.code}</p><div class="kv">${ranks()}${sec("규모")}${row("면적", fmt(o.area_m2) + " ㎡")}${row("서울시 점포 수(2025 4분기)", fmt(o.stores_seoul) + " 개")}${row("프랜차이즈 점포", fmt(o.franchise) + " 개")}${row("분기 개업 / 폐업", fmt(o.open_q) + " / " + fmt(o.close_q))}${row("분기 폐업률", fmt(o.close_rate, 2) + " %")}${row("상권 변화지표", o.change_ix || "–")}${row("운영 영업개월 평균", fmt(o.oper_months, 0))}${sec("매출(서울시 추정)")}${row("2025 하반기 매출", fmt(o.sales, 1) + " 억")}${row("전년 하반기 대비", o["sales_h2_yoy_%"] == null ? "–" : fmt(o["sales_h2_yoy_%"], 1) + " %")}${row("점포당 하루 매출", fmt(o.sales_per_store_만원, 0) + " 만원")}${row("주말 매출 비중", fmt(o.weekend, 1) + " %")}${row("17~21시 매출 비중", fmt(o["evening_share_%"], 1) + " %")}${row("매출 상위 업종", o.top_sales_industries || "–")}${sec("유동인구·시설")}${row("분기 유동인구(길단위)", fmt(o.flpop_q))}${row("60대+ 비중", fmt(o["flpop_60p_%"], 1) + " %")}${row("주말 비중", fmt(o["flpop_weekend_%"], 1) + " %")}${row("집객시설 / 지하철역", fmt(o.facilities) + " / " + fmt(o.subway))}${sec("우리 분석(호우)")}${row("호우일 하루 손실(서울시 매출 기준)", fmt(o.loss_seoul_만원, 0) + " 만원")}${row("호우일 하루 손실(업소 수 배분)", fmt(o.loss_alloc, 0) + " 만원")}${row("호우일 손실률", fmt(o.loss_rate, 2) + " %")}${row("20mm 시즌 기대 지급액", fmt(o.pay20, 0) + " 만원")}${row("상가정보 업소 / 카드 매핑", fmt(o["업소 수(상가정보)"]) + " / " + fmt(o["카드 업종 매핑 업소"]))}${row("취약 등급 업소(비율)", fmt(o.vuln) + " 개 (" + fmt(o.vuln_share, 1) + " %)")}${row("음식 업종 비중", fmt(o.food, 0) + " %")}${row("주요 업종", o["주요 업종(상위 3)"] || "–")}</div>`;
-    if (o.kind === "cand") return `<h2>${o.name}</h2><p class="sub">밀집 후보 · ${o.emd} · ${o.ldong}</p><div class="kv">${ranks()}${sec("규모")}${row("업소 수(상가정보)", fmt(o.n_stores) + " 개")}${row("카드 업종 매핑", fmt(o.mapped) + " 개")}${row("면적(볼록껍질)", fmt(o.area_m2) + " ㎡")}${row("음식 업종 비중", fmt(o.food, 0) + " %")}${sec("우리 분석(호우)")}${row("호우일 하루 손실", fmt(o.loss, 0) + " 만원")}${row("20mm 시즌 기대 지급액", fmt(o.pay20, 0) + " 만원")}${row("손실률(추정)", fmt(o.loss_rate, 1) + " %")}${row("취약 등급 업소(비율)", fmt(o.vuln) + " 개 (" + fmt(o.vuln_share, 1) + " %)")}${o.voucher != null ? row("지역화폐 가맹 비율(추정)", fmt(o.voucher, 1) + " %") : ""}${row("주요 업종", o.top || "–")}${o.emd_sales_2023 ? sec("읍면동 매출 구간(2023.7)") + row(o.emd, o.emd_sales_2023) : ""}</div>`;
+    if (o.kind === "cand") return `<h2>${o.name}</h2><p class="sub">밀집 후보(${o.method_label}) · ${o.emd} · ${o.ldong}</p><div class="kv">${ranks()}${sec("규모")}${row("업소 수(상가정보)", fmt(o.n_stores) + " 개")}${row("카드 업종 매핑", fmt(o.mapped) + " 개")}${row("면적(업소 외곽선)", fmt(o.area_m2) + " ㎡")}${row("음식 업종 비중", fmt(o.food, 0) + " %")}${sec("우리 분석(호우)")}${row("호우일 하루 손실", fmt(o.loss, 0) + " 만원")}${row("20mm 시즌 기대 지급액", fmt(o.pay20, 0) + " 만원")}${row("손실률(추정)", fmt(o.loss_rate, 1) + " %")}${row("취약 등급 업소(비율)", fmt(o.vuln) + " 개 (" + fmt(o.vuln_share, 1) + " %)")}${o.voucher != null ? row("지역화폐 가맹 비율(추정)", fmt(o.voucher, 1) + " %") : ""}${row("주요 업종", o.top || "–")}${o.emd_sales_2023 ? sec("읍면동 매출 구간(2023.7)") + row(o.emd, o.emd_sales_2023) : ""}</div>`;
     return `<h2>${o.name}</h2><p class="sub">${o.kind === "market" ? "전통시장" : o.kind === "alley" ? "지정 골목형상점가" : o.kind === "tourist" ? "지정 관광지" : ""}</p><div class="kv">${o.stores != null ? row("점포 수", fmt(o.stores) + " 개") : ""}${o.items ? row("취급 품목", o.items) : ""}${o.type ? row("유형", o.type) : ""}${o.addr ? row("주소", o.addr) : ""}</div>`;
   }
   function el(tag, attrs) { const e = document.createElementNS("http://www.w3.org/2000/svg", tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
@@ -219,7 +224,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
     proj = makeProj(R);
     items = [];
     R.official.forEach(o => items.push(unify(o, "official")));
-    R.candidates.forEach(o => items.push(unify(o, "cand")));
+    cands(R).forEach(o => items.push(unify(o, "cand")));
     R.markets.forEach(o => items.push(unify(o, "market")));
     R.alley_official.forEach(o => items.push(unify(o, "alley")));
     R.tourist.forEach(o => items.push(unify(o, "tourist")));
@@ -287,7 +292,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
     const R = D.regions[state.region];
     const parts = [];
     if (R.official.length) parts.push(`<span><i style="background:var(--golmok)"></i>골목상권</span><span><i style="background:var(--baldal)"></i>발달상권</span><span><i style="background:var(--market)"></i>전통시장(서울시 상권)</span><span><i style="background:var(--tour)"></i>관광특구</span>`);
-    parts.push(`<span><i style="background:var(--cand);opacity:.6"></i>밀집 후보(점선)</span>`);
+    parts.push(`<span><i style="background:var(--cand);opacity:.6"></i>밀집 후보(점선, ${candLabel()})</span>`);
     if (R.markets.length) parts.push(`<span><i style="background:var(--market)"></i>전통시장(표준데이터)</span>`);
     if (R.alley_official.length) parts.push(`<span><i class="dot" style="background:var(--alley)"></i>지정 골목형상점가</span>`);
     if (R.tourist.length) parts.push(`<span><i style="background:var(--tour)"></i>지정 관광지</span>`);
@@ -311,7 +316,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
     const key = sort.key || (state.axis ? state.ind[state.axis] : null);
     if (key) { const dir = sort.key ? (sort.asc ? 1 : -1) : -IND[key].dir; rows.sort((a, b) => { const x = a[key], y = b[key]; if (x == null) return 1; if (y == null) return -1; return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * dir; }); }
     const hiIds = new Set(highlight.map(h => h.id));
-    $("tablehead").innerHTML = `<span>${state.region === "gangnam" ? "강남 공식 상권" : "춘천 밀집 후보"} ${rows.length}곳${state.minSize ? " (점포 30개 미만 제외)" : ""}</span><span>열 제목을 누르면 정렬되고, 숫자 열은 상위 ${state.topN}개가 지도에 번호로 표시됩니다.</span>`;
+    $("tablehead").innerHTML = `<span>${state.region === "gangnam" ? "강남 공식 상권" : "춘천 밀집 후보(" + candLabel() + ")"} ${rows.length}곳${state.minSize ? " (점포 30개 미만 제외)" : ""}</span><span>열 제목을 누르면 정렬되고, 숫자 열은 상위 ${state.topN}개가 지도에 번호로 표시됩니다.</span>`;
     $("tbl").querySelector("thead").innerHTML = "<tr>" + cols.map(c => `<th class="${c[2] ? "num" : ""} ${key === c[0] ? "sorted" : ""}" data-k="${c[0]}">${c[1]}${sort.key === c[0] ? (sort.asc ? " ▲" : " ▼") : ""}</th>`).join("") + "</tr>";
     $("tbl").querySelector("tbody").innerHTML = rows.map(r => `<tr data-id="${r.id}" class="${state.sel && state.sel.id === r.id ? "sel" : ""} ${hiIds.has(r.id) ? "top" : ""}">` + cols.map(c => { const v = r[c[0]]; const d = (c[0] === "loss_rate" || c[0] === "close_rate") ? 2 : (c[0] === "sales_h2_yoy_%" || c[0] === "vuln_share" || c[0] === "voucher") ? 1 : 0; return `<td class="${c[2] ? "num" : ""}">${c[2] ? fmt(v, d) : (v == null ? "–" : v)}</td>`; }).join("") + "</tr>").join("");
     $("tbl").querySelectorAll("th").forEach(th => th.addEventListener("click", () => { const k = th.dataset.k; sort = { key: k, asc: sort.key === k ? !sort.asc : false }; if (IND[k]) state.axis = null; buildControls(); render(); }));
@@ -337,6 +342,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
     const R = D.regions[state.region];
     const layerDefs = [["official", "공식 상권"], ["cand", "밀집 후보"], ["markets", "전통시장"], ["alley", "지정 골목형상점가"], ["tourist", "관광지"], ["bg", "유동인구 배경"], ["emd", "행정동"]].filter(([k]) => !(k === "official" && !R.official.length) && !(k === "alley" && !R.alley_official.length) && !(k === "tourist" && !R.tourist.length));
     seg("layerSeg", layerDefs, (k) => state.layers[k], (k) => { state.layers[k] = !state.layers[k]; });
+    seg("candSeg", Object.keys(D.cand_methods || {}).map(k => [k, D.cand_methods[k].label]), (k) => state.cand === k, (k) => { state.cand = k; if (state.sel && state.sel.kind === "cand") { state.sel = null; $("detail").innerHTML = "<h2>구역을 클릭하세요</h2><p class='sub'>지도 위 구역이나 표의 행을 누르면 상세 정보가 여기에 고정됩니다.</p>"; } fixDefaults(); });
     seg("axisSeg", [["none", "없음"]].concat(Object.keys(AXES).map(a => [a, AXES[a].label])), (k) => (state.axis || "none") === k, (k) => { state.axis = k === "none" ? null : k; sort = { key: null, asc: false }; });
     const mSel = $("metric"); mSel.innerHTML = Object.keys(METRICS).map(k => `<option value="${k}" ${k === state.metric ? "selected" : ""}>${METRICS[k].label}</option>`).join("");
     const iSel = $("indSel"); const a = state.axis || "scale"; const avail = (k) => rankSet().some(o => o[k] != null);
@@ -350,7 +356,7 @@ input#q { font: inherit; font-size: .85rem; padding: 4px 8px; border: 1px solid 
   $("minSize").addEventListener("change", () => { state.minSize = $("minSize").checked; render(); });
   $("q").addEventListener("input", () => { state.q = $("q").value.trim(); renderTable(); });
   // 지표 가용성(밀집 후보/춘천)에 맞춰 기본 지표 조정
-  function fixDefaults() { items = []; const R = D.regions[state.region]; R.official.forEach(o => items.push(unify(o, "official"))); R.candidates.forEach(o => items.push(unify(o, "cand"))); for (const a of Object.keys(AXES)) { if (!rankSet().some(o => o[state.ind[a]] != null)) { const alt = AXES[a].inds.find(k => rankSet().some(o => o[k] != null)); if (alt) state.ind[a] = alt; } } }
+  function fixDefaults() { items = []; const R = D.regions[state.region]; R.official.forEach(o => items.push(unify(o, "official"))); cands(R).forEach(o => items.push(unify(o, "cand"))); for (const a of Object.keys(AXES)) { if (!rankSet().some(o => o[state.ind[a]] != null)) { const alt = AXES[a].inds.find(k => rankSet().some(o => o[k] != null)); if (alt) state.ind[a] = alt; } } }
   fixDefaults(); buildControls(); render();
 })();
 </script>

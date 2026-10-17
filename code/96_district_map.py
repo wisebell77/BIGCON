@@ -3,10 +3,11 @@
 입력(원본은 D:/Bigcon_data)
 - 서울 영역-상권 shapefile(EPSG:5181, 상권 1,650개 → 강남구 103개: 골목 54·발달 39·전통시장 9·관광특구 1), 영역-행정동 shapefile
 - 추정매출-상권(2024·2025 zip), 점포-상권(2025 zip), 길단위인구·집객시설·상권변화지표-상권(API CSV)
-- 95번의 밀집 후보(al_clusters, al_cluster_stores), 상가정보(stores_clean), st_industry·r_rate_per_store(업종 손실 단가)
+- 95b번의 밀집 후보(al_clusters_rect, al_cluster_stores_rect: 원형 창·길 따라 창 두 방식), 상가정보(stores_clean), st_industry·r_rate_per_store(업종 손실 단가)
 - 공공데이터포털: 전국전통시장표준데이터, 전국관광지정보표준데이터, 골목형상점가 현황(2024.12), 춘천시 상권 매출현황(읍면동×업종 구간, 2023.7)
 좌표: 5181(중부원점) → 경위도는 뉴턴 반복으로 역변환, 상가정보 x,y(UTM-K 5179)는 같은 식의 정변환으로 맞춘다. shapely로 면적·포함 판정.
-출력: outputs/demo/district_data.json, outputs/tables/al_gangnam_official_districts.csv, al_gangnam_candidates.csv, al_chuncheon_districts.csv
+밀집 후보는 두 방식(원형 창, 길 따라 창)을 모두 넣어 지도에서 버튼으로 바꿔 볼 수 있게 한다(기본 길 따라 창). 구역 외곽선은 업소 점을 30m 넓힌 뒤 12m 깎은 선(업소 주변 18m)이라 길을 따라 늘어선 구역은 띠 모양이 된다.
+출력: outputs/demo/district_data.json, 페이지 outputs/demo/상권지도.html(district_template.html의 __DATA__에 JSON 주입), outputs/tables/al_gangnam_official_districts.csv, al_gangnam_candidates.csv, al_chuncheon_districts.csv
 """
 import io
 import json
@@ -179,7 +180,7 @@ def main():
     out_dir.mkdir(parents=True, exist_ok=True)
     # 상가정보 업소 + 업종 손실 단가
     st = C.load("stores_clean")
-    sti = pd.read_csv(C.TAB / "st_industry.csv", encoding="utf-8-sig")[["region", "industry", "rain_loss_day_per_store_만원", "grade_V"]].rename(columns={"rain_loss_day_per_store_만원": "rain_loss"})
+    sti = pd.read_csv(C.TAB / "st_industry.csv", encoding="utf-8-sig")[["region", "industry", "rain_loss_day_per_store_만원", "sales_day_per_store_만원", "grade_V"]].rename(columns={"rain_loss_day_per_store_만원": "rain_loss", "sales_day_per_store_만원": "sales_day"})
     rate = pd.read_csv(C.TAB / "r_rate_per_store.csv", encoding="utf-8-sig")[["region", "industry", "시즌 기대 지급액 업소당(만원, 20mm 트리거)"]].rename(columns={"시즌 기대 지급액 업소당(만원, 20mm 트리거)": "pay20"})
     st = st.merge(sti, on=["region", "industry"], how="left").merge(rate, on=["region", "industry"], how="left")
     data = {"generated": pd.Timestamp.now().strftime("%Y-%m-%d"), "regions": {}}
@@ -265,29 +266,43 @@ def main():
     G.to_csv(C.TAB / "al_gangnam_official_districts.csv", index=False, encoding="utf-8-sig")
     print(f"강남 공식 상권 {len(G)}개: {G.type.value_counts().to_dict()}; 2025 하반기 매출 합 {G.sales_h2_2025_억.sum():,.0f}억, 상가정보 업소 {G['업소 수(상가정보)'].sum():,}개")
 
-    # ------------------------------------------------------------ 밀집 후보(강남 법정30, 춘천 완화15) → 볼록 껍질
-    A = pd.read_csv(C.TAB / "al_clusters.csv", encoding="utf-8-sig")
-    M = pd.read_csv(C.TAB / "al_cluster_stores.csv", encoding="utf-8-sig", dtype={"상가업소번호": str})
+    # ------------------------------------------------------------ 밀집 후보(강남 법정30, 춘천 완화15): 원형 창·길 따라 창(95b) 두 방식 → 업소 주변 외곽선
+    A = pd.read_csv(C.TAB / "al_clusters_rect.csv", encoding="utf-8-sig")
+    M = pd.read_csv(C.TAB / "al_cluster_stores_rect.csv", encoding="utf-8-sig", dtype={"상가업소번호": str})
+    M = M.merge(st[["상가업소번호", "big", "grade_V", "rain_loss", "pay20", "sales_day"]], on="상가업소번호", how="left")
     RULE = {"gangnam": "법정(30개)", "chuncheon": "완화(15개)"}
-    cands = {}
+    METHODS = {"rect": {"name": "길따라", "label": "길 따라 창", "desc": "업소가 늘어선 방향으로 돌린 2천㎡ 직사각형 창(100×20·80×25·63×32m 중 최댓값) 안 업소 수"},
+               "circle": {"name": "원형", "label": "원형 창", "desc": "반경 25.2m 원(2천㎡) 안 업소 수"}}
+
+    def outline(xy):
+        """업소 점들을 30m 넓힌 뒤 12m 깎은 외곽선(업소 주변 18m). 핵 연결 거리 50m가 끊기지 않고, 길을 따라 늘어선 구역은 띠 모양이 된다."""
+        return MultiPoint(xy).buffer(30, 6).buffer(-12, 6)
+
+    cands = {region: {} for region in C.REGIONS}
     for region in C.REGIONS:
-        col = f"cluster_{RULE[region]}"
-        a = A[(A.region == region) & (A.기준 == RULE[region]) & (~A["단일 건물 구역"])]
-        m = M[M.region == region]
-        lst = []
-        for _, r in a.iterrows():
-            g = m[m[col] == r.cluster]
-            if len(g) < 3:
-                continue
-            hull = MultiPoint(list(zip(g.x, g.y))).convex_hull.buffer(12)
-            lst.append({"id": int(r.cluster), "name": f"{r.법정동} 밀집구역 {int(r.cluster)}", "emd": r.행정동, "ldong": r.법정동, "area_m2": round(float(hull.area)),
-                        "n_stores": int(r["업소 수"]), "mapped": int(r["카드 업종 매핑 업소"]), "food_share": None if pd.isna(r["음식 업종 비중"]) else float(r["음식 업종 비중"]),
-                        "vuln_stores": int(r["취약 등급 업소"]), "rain_loss_만원": float(r["호우일 하루 손실(만원)"]), "pay20_만원": float(r["20mm 시즌 기대 지급액(만원)"]),
-                        "loss_rate_%": None if pd.isna(r["손실률 proxy(%)"]) else float(r["손실률 proxy(%)"]), "top": r["주요 업종(상위 3)"],
-                        "rings": poly_to_lonlat(hull, P5179, tol=1.0)})
-        cands[region] = lst
-        print(f"{C.REGION_NAME[region]} 밀집 후보 {len(lst)}개")
-    pd.DataFrame([{k: v for k, v in c.items() if k != "rings"} for c in cands["gangnam"]]).to_csv(C.TAB / "al_gangnam_candidates.csv", index=False, encoding="utf-8-sig")
+        rule = RULE[region]
+        m_all = M[M.region == region]
+        for mkey, mt in METHODS.items():
+            col = f"cl_{mt['name']}_{rule}"
+            a = A[(A.region == region) & (A.방법 == mt["name"]) & (A.기준 == rule) & (~A["단일 건물 구역"])]
+            lst = []
+            for _, r in a.iterrows():
+                g = m_all[m_all[col] == r.cluster]
+                if len(g) < 3:
+                    continue
+                shape = outline(list(zip(g.x, g.y)))
+                ss = store_stats(g)
+                mapped = g[g.industry.notna()]
+                sales_sum = float(mapped.sales_day.fillna(0).sum())
+                lst.append({"id": int(r.cluster), "method": mkey, "method_label": mt["label"], "name": f"{r.법정동} 밀집구역 {int(r.cluster)}", "emd": r.행정동, "ldong": r.법정동,
+                            "area_m2": round(float(shape.area)), "n_stores": int(len(g)), "mapped": int(len(mapped)), "food_share": ss["음식 업종 비중"], "vuln_stores": ss["취약 등급 업소"],
+                            "rain_loss_만원": ss["호우일 하루 손실(만원)"], "pay20_만원": ss["20mm 시즌 기대 지급액(만원)"], "sales_day_만원": round(sales_sum, 1),
+                            "loss_rate_%": round(ss["호우일 하루 손실(만원)"] / sales_sum * 100, 1) if sales_sum else None, "top": ss["주요 업종(상위 3)"],
+                            "vuln_share_%": round(ss["취약 등급 업소"] / len(mapped) * 100, 1) if len(mapped) else None,
+                            "rings": poly_to_lonlat(shape, P5179, tol=1.0)})
+            cands[region][mkey] = lst
+            print(f"{C.REGION_NAME[region]} 밀집 후보({mt['label']}, {rule}) {len(lst)}개, 업소 {sum(c['n_stores'] for c in lst):,}개, 호우일 하루 손실 {sum(c['rain_loss_만원'] for c in lst) / 1e4:,.1f}억")
+    pd.DataFrame([{"방법": c["method_label"], **{k: v for k, v in c.items() if k not in ("rings", "method", "method_label")}} for mk in METHODS for c in cands["gangnam"][mk]]).to_csv(C.TAB / "al_gangnam_candidates.csv", index=False, encoding="utf-8-sig")
 
     # ------------------------------------------------------------ 춘천: 읍면동 매출 구간(2023.7), 골목형상점가(지정), 전통시장, 관광지
     cs = read_csv_any(PORTAL / "강원특별자치도 춘천시_상권 매출현황_20230701.csv")
@@ -295,7 +310,7 @@ def main():
     order = ["0원", "천만원 미만", "천만원대"] + [f"{i}억대" for i in range(1, 100)]
     cs["rank"] = cs.매출액.map({v: i for i, v in enumerate(order)}).fillna(-1)
     emd_sales = cs.sort_values("rank", ascending=False).groupby("읍면동").apply(lambda g: ", ".join(f"{r.업종구분} {r.매출액}" for r in g.head(3).itertuples()), include_groups=False).to_dict()
-    for c in cands["chuncheon"]:
+    for c in [c for lst in cands["chuncheon"].values() for c in lst]:
         c["emd_sales_2023"] = emd_sales.get(c["emd"], "")
     tm = read_csv_any(PORTAL / "전국전통시장표준데이터.csv")
     tm = tm[tm.소재지도로명주소.fillna("").str.contains("춘천시|강남구")]
@@ -327,14 +342,12 @@ def main():
     cc["k2"] = cc.도로명주소.map(road_key)
     cc["voucher"] = [((a, b) in vkeys) or (a in vnames and a != "") for a, b in zip(cc.k1, cc.k2)]
     print(f"상품권 가맹점 매칭: 상가정보 춘천 업소 {len(cc):,}개 중 {int(cc.voucher.sum()):,}개 가맹 추정({cc.voucher.mean()*100:.0f}%)")
-    col_c = f"cluster_{RULE['chuncheon']}"
-    mm = M[M.region == "chuncheon"][["상가업소번호", col_c]].merge(cc[["상가업소번호", "voucher"]], on="상가업소번호", how="left")
-    vshare = mm[mm[col_c] >= 0].groupby(col_c).voucher.mean()
-    for c in cands["chuncheon"]:
-        c["voucher_share_%"] = round(float(vshare.get(c["id"], np.nan)) * 100, 1) if c["id"] in vshare.index else None
-        c["vuln_share_%"] = round(c["vuln_stores"] / c["mapped"] * 100, 1) if c["mapped"] else None
-    for c in cands["gangnam"]:
-        c["vuln_share_%"] = round(c["vuln_stores"] / c["mapped"] * 100, 1) if c["mapped"] else None
+    cols_c = {mk: f"cl_{mt['name']}_{RULE['chuncheon']}" for mk, mt in METHODS.items()}
+    mm = M[M.region == "chuncheon"][["상가업소번호", *cols_c.values()]].merge(cc[["상가업소번호", "voucher"]], on="상가업소번호", how="left")
+    for mk, col in cols_c.items():
+        vshare = mm[mm[col] >= 0].groupby(col).voucher.mean()
+        for c in cands["chuncheon"][mk]:
+            c["voucher_share_%"] = round(float(vshare[c["id"]]) * 100, 1) if c["id"] in vshare.index else None
     alley_pts = []
     for r in al.itertuples():
         m = re.search(r"춘천시\s+(\S+?)\s+(\d+)", r.주소)
@@ -360,7 +373,7 @@ def main():
     for region in C.REGIONS:
         c = cells[(cells.region == region) & (cells["pop"] > 0)].copy()
         # 상권 폴리곤 주변(±4km)만, 춘천은 400m 격자로(셀 수를 줄여 지도가 가볍게)
-        pts_xy = pd.concat([M[(M.region == region) & (M[f"cluster_{RULE[region]}"] >= 0)][["x", "y"]]])
+        pts_xy = M[(M.region == region) & (M[[f"cl_{mt['name']}_{RULE[region]}" for mt in METHODS.values()]].ge(0).any(axis=1))][["x", "y"]]
         cx0, cx1, cy0, cy1 = pts_xy.x.min() - 4000, pts_xy.x.max() + 4000, pts_xy.y.min() - 4000, pts_xy.y.max() + 4000
         c = c[c.x.between(cx0, cx1) & c.y.between(cy0, cy1)]
         gs = 200 if region == "gangnam" else 400
@@ -380,19 +393,41 @@ def main():
         lon, lat = tm_inverse(e.x.values, e.y.values, **P5179)
         labels[region] = [{"name": n, "lon": round(float(a), 5), "lat": round(float(b), 5), "pop60": round(float(p))} for n, a, b, p in zip(e.emd_name, lon, lat, e.pop60)]
 
-    data["regions"]["gangnam"] = {"name": "강남구", "official": official, "candidates": cands["gangnam"], "markets": [m for m in markets if m["region"] == "gangnam"], "alley_official": [], "tourist": [],
+    data["cand_methods"] = {mk: {"label": mt["label"], "desc": mt["desc"]} for mk, mt in METHODS.items()}
+    data["cand_default"] = "rect"
+    data["regions"]["gangnam"] = {"name": "강남구", "official": official, "candidates": cands["gangnam"], "cand_rule": RULE["gangnam"], "markets": [m for m in markets if m["region"] == "gangnam"], "alley_official": [], "tourist": [],
                                   "bg": bg["gangnam"], "emd_lines": emd_lines, "emd_labels": labels["gangnam"]}
-    data["regions"]["chuncheon"] = {"name": "춘천시", "official": [], "candidates": cands["chuncheon"], "markets": [m for m in markets if m["region"] == "chuncheon"], "alley_official": alley_pts, "tourist": tourist,
+    data["regions"]["chuncheon"] = {"name": "춘천시", "official": [], "candidates": cands["chuncheon"], "cand_rule": RULE["chuncheon"], "markets": [m for m in markets if m["region"] == "chuncheon"], "alley_official": alley_pts, "tourist": tourist,
                                     "bg": bg["chuncheon"], "emd_lines": [], "emd_labels": labels["chuncheon"]}
-    (out_dir / "district_data.json").write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    # 춘천 표
-    rows = [{"구분": "밀집 후보(완화 15개)", "이름": c["name"], "행정동": c["emd"], "업소 수": c["n_stores"], "면적(㎡, 볼록껍질)": c["area_m2"], "음식 비중": c["food_share"], "취약 등급 업소": c["vuln_stores"],
-             "호우일 하루 손실(만원)": c["rain_loss_만원"], "20mm 시즌 기대 지급액(만원)": c["pay20_만원"], "손실률(%)": c["loss_rate_%"], "취약 업소 비율(%)": c.get("vuln_share_%"), "상품권 가맹 비율(%)": c.get("voucher_share_%"), "주요 업종": c["top"], "읍면동 매출 구간(2023.7 상위3)": c["emd_sales_2023"]} for c in cands["chuncheon"]]
+
+    def clean(o):
+        """numpy 형과 NaN을 JSON에 넣을 수 있는 값으로."""
+        if isinstance(o, dict):
+            return {k: clean(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [clean(v) for v in o]
+        if isinstance(o, np.bool_):
+            return bool(o)
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, (float, np.floating)):
+            return None if (np.isnan(o) or np.isinf(o)) else float(o)
+        return o
+
+    js = json.dumps(clean(data), ensure_ascii=False)
+    (out_dir / "district_data.json").write_text(js, encoding="utf-8")
+    tpl = (out_dir / "district_template.html").read_text(encoding="utf-8")
+    assert tpl.count("__DATA__") == 1
+    (out_dir / "상권지도.html").write_text(tpl.replace("__DATA__", js.replace("</", "<\\/")), encoding="utf-8")
+    # 춘천 표(두 방식 모두, 기본인 길 따라 창 먼저)
+    rows = [{"구분": f"밀집 후보({c['method_label']}, {RULE['chuncheon']})", "방법": c["method_label"], "이름": c["name"], "행정동": c["emd"], "업소 수": c["n_stores"], "면적(㎡, 업소 외곽)": c["area_m2"], "음식 비중": c["food_share"], "취약 등급 업소": c["vuln_stores"],
+             "호우일 하루 손실(만원)": c["rain_loss_만원"], "20mm 시즌 기대 지급액(만원)": c["pay20_만원"], "손실률(%)": c["loss_rate_%"], "취약 업소 비율(%)": c.get("vuln_share_%"), "상품권 가맹 비율(%)": c.get("voucher_share_%"), "주요 업종": c["top"], "읍면동 매출 구간(2023.7 상위3)": c["emd_sales_2023"]}
+            for mk in METHODS for c in cands["chuncheon"][mk]]
     rows += [{"구분": "골목형상점가(지정)", "이름": p["name"], "행정동": "", "업소 수": p["stores"], "주요 업종": p["items"], "비고": p["addr"]} for p in alley_pts]
     rows += [{"구분": "전통시장", "이름": m["name"], "업소 수": m["stores"], "주요 업종": m["items"], "비고": m["addr"]} for m in markets if m["region"] == "chuncheon"]
     rows += [{"구분": "관광지(지정)", "이름": t["name"], "주요 업종": t["type"], "비고": t["addr"]} for t in tourist]
     pd.DataFrame(rows).to_csv(C.TAB / "al_chuncheon_districts.csv", index=False, encoding="utf-8-sig")
-    print(f"저장: district_data.json({(out_dir / 'district_data.json').stat().st_size / 1e6:.1f}MB), al_gangnam_official_districts.csv, al_gangnam_candidates.csv, al_chuncheon_districts.csv")
+    print(f"저장: district_data.json({(out_dir / 'district_data.json').stat().st_size / 1e6:.1f}MB), 상권지도.html, al_gangnam_official_districts.csv, al_gangnam_candidates.csv, al_chuncheon_districts.csv")
 
 
 if __name__ == "__main__":
