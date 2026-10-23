@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>춘천 레인체크 사용처 지도</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root { --bg:#fbfaf7; --fg:#1f2933; --muted:#6b7280; --line:#e5e7eb; --near:#d1495b; --mid:#edae49; --far:#8d99ae; --tour:#2e86ab; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; background:var(--bg); color:var(--fg); }
+  header { padding:16px 20px 8px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  header p { margin:0; color:var(--muted); font-size:13px; line-height:1.5; }
+  .wrap { display:grid; grid-template-columns: 1fr 420px; gap:12px; padding:8px 20px 20px; }
+  #map { height: 78vh; border-radius:10px; border:1px solid var(--line); }
+  .side { height:78vh; overflow:auto; background:#fff; border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .chip { font-size:12px; padding:4px 8px; border-radius:999px; border:1px solid var(--line); cursor:pointer; background:#fff; }
+  .chip.on { background:#1f2933; color:#fff; }
+  table { width:100%; border-collapse:collapse; font-size:12.5px; }
+  th, td { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { position:sticky; top:0; background:#fff; color:var(--muted); font-weight:600; }
+  tr:hover { background:#f3f4f6; cursor:pointer; }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:4px; }
+  .legend { background:#fff; padding:8px 10px; border-radius:8px; font-size:12px; line-height:1.7; box-shadow:0 1px 4px rgba(0,0,0,.15); }
+  .note { font-size:11.5px; color:var(--muted); margin-top:10px; line-height:1.5; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; padding:8px 16px 16px; } #map, .side { height: 55vh; } header { padding:14px 16px 6px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>춘천 레인체크 쿠폰 사용처 후보: 골목상권 × 관광지 거리</h1>
+  <p>원 = 골목상권 후보 구역(2천㎡ 안 15개 이상 밀집, 팀 95_alley.py) · 별 = 주요 관광지(근처 가게 좌표로 잡은 대략 위치). 원을 누르면 구역 정보가, 오른쪽 표 행을 누르면 그 구역으로 이동해요.</p>
+</header>
+<div class="wrap">
+  <div id="map"></div>
+  <div class="side">
+    <div class="chips" id="chips"></div>
+    <table><thead><tr><th>구역</th><th>업소</th><th>가까운 관광지</th><th>거리</th></tr></thead><tbody id="tb"></tbody></table>
+    <div class="note">
+      · 업소 수는 상가정보(2026.06) 기준, 병원·학원 등 비소상공인 포함.<br>
+      · "호우일 하루 손실"은 업종 단가 × 업소 수 배분값(팀 st_industry), 구역별 측정값이 아님.<br>
+      · 관광지 위치는 대략값이며 레고랜드는 지도로 확인 필요. 엘리시안 강촌·소양강댐은 가까운 구역이 없음.<br>
+      · 공식 지정 골목형상점가(강원대 후문, 한림대, 후평3동 행복마을, 뒤뜰, 강촌리)는 길 따라 늘어선 저밀도라 일부만 잡힘.
+    </div>
+  </div>
+</div>
+<script>
+const DATA = __DATA__;
+const COL = {'1km 안(걸어서)':'#d1495b','1~2km(차로 5분)':'#edae49','2km 밖(생활 상권)':'#8d99ae'};
+const map = L.map('map').setView([37.875, 127.72], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom: 19, attribution: '&copy; OpenStreetMap'}).addTo(map);
+const groups = {};
+Object.keys(COL).forEach(k => groups[k] = L.layerGroup().addTo(map));
+DATA.stores.forEach(([lon, lat, g, name, ind]) => {
+  L.circleMarker([lat, lon], {radius: 2, color: COL[g], weight: 0, fillOpacity: .45}).bindTooltip(`${name} · ${ind}`).addTo(groups[g]);
+});
+const markers = [];
+DATA.clusters.forEach((c, i) => {
+  const m = L.circleMarker([c.lat, c.lon], {radius: 5 + Math.sqrt(c['업소 수']) * 1.2, color: '#111', weight: 1, fillColor: COL[c['구분']], fillOpacity: .75})
+    .bindPopup(`<b>${c['법정동']} (${c['행정동']})</b><br>업소 ${c['업소 수']}개 · 음식 ${c['음식 업종 비중']}%<br>주요 업종: ${c['주요 업종(상위 3)']}<br>취약 등급 업소 ${c['취약 등급 업소']}개 · 호우일 하루 손실 ${Math.round(c['호우일 하루 손실(만원)'])}만원(배분값)<br>가까운 관광지: ${c['가까운 관광지']} (${c['관광지 거리 m'].toLocaleString()}m)`)
+    .addTo(groups[c['구분']]);
+  markers.push(m);
+});
+DATA.attractions.forEach(a => {
+  L.marker([a.lat, a.lon], {icon: L.divIcon({className: '', html: '<div style="font-size:22px;color:#2e86ab;text-shadow:0 0 2px #fff">★</div>', iconSize: [22, 22], iconAnchor: [11, 11]})})
+    .bindTooltip(`${a.name} (${a['종류']})`, {permanent: true, direction: 'right', offset: [8, 0]})
+    .bindPopup(`<b>${a.name}</b><br>위치 근거: ${a['근거']}`).addTo(map);
+});
+const legend = L.control({position: 'bottomleft'});
+legend.onAdd = () => { const d = L.DomUtil.create('div', 'legend');
+  d.innerHTML = Object.entries(COL).map(([k, v]) => `<span class="dot" style="background:${v}"></span>${k}`).join('<br>') + '<br><span style="color:#2e86ab">★</span> 주요 관광지(대략)'; return d; };
+legend.addTo(map);
+let filter = '전체';
+const chips = document.getElementById('chips');
+['전체', ...Object.keys(COL)].forEach(k => { const b = document.createElement('span'); b.className = 'chip' + (k === filter ? ' on' : ''); b.textContent = k;
+  b.onclick = () => { filter = k; [...chips.children].forEach(x => x.classList.toggle('on', x.textContent === k));
+    Object.entries(groups).forEach(([g, lg]) => (k === '전체' || g === k) ? lg.addTo(map) : map.removeLayer(lg)); render(); };
+  chips.appendChild(b); });
+function render() {
+  const tb = document.getElementById('tb'); tb.innerHTML = '';
+  DATA.clusters.forEach((c, i) => { if (filter !== '전체' && c['구분'] !== filter) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><span class="dot" style="background:${COL[c['구분']]}"></span>${c['법정동']}</td><td>${c['업소 수']}</td><td>${c['가까운 관광지']}</td><td>${(c['관광지 거리 m']/1000).toFixed(1)}km</td>`;
+    tr.onclick = () => { map.setView([c.lat, c.lon], 16); markers[i].openPopup(); };
+    tb.appendChild(tr); });
+}
+render();
+map.fitBounds(DATA.clusters.map(c => [c.lat, c.lon]).concat(DATA.attractions.filter(a => a.lat < 37.92 && a.lon > 127.6).map(a => [a.lat, a.lon])), {padding: [20, 20]});
+</script>
+</body>
+</html>
