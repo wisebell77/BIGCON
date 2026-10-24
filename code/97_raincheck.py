@@ -2,8 +2,9 @@
 
 입력: card_day_resid(데이터2 거주지 구분, 지역×업종×일), card2_clean(성·연령 셀, 건당 결제액), model_panel_day(업종군·분석 범위), calendar, weather_daily,
       a_expected_loss_calendar_2026(기후학적 호우 확률), f_forecast_skill(단기예보 적중), tour_monthly_visitors(관광데이터랩 월 방문자)
-대상 업종군(레인체크 사용처, 회의안의 숙소·식당·어트랙션): 음식점, 카페·베이커리, 숙박, 여가·스포츠. 분석 범위(in_scope) 업종만.
-출력(outputs/tables/rc_*.csv, 그림 rc01~rc04)
+대상 업종군(레인체크 사용처, 회의안의 숙소·식당·어트랙션): 음식점, 카페·베이커리, 숙박, 여가·스포츠. 분석 범위(in_scope) 중 소상공인 중심 업종(small_biz)만 쓴다.
+      호텔·콘도, 골프장, 놀이동산, 영화관은 상품권 가맹 대상이 아니라 사용처가 될 수 없으므로 뺀다(14개 업종: 한식·일식·중식·양식·기타요식·패스트푸드, 커피전문점·제과점, 모텔·여관·기타숙박, 노래방·게임방·스포츠시설·헬스장).
+출력(outputs/tables/rc_*.csv, 그림 rc01~rc05)
  A. rc_sensitivity_dow.csv   비 10mm+ 민감도(매출·건수)를 현지인/외지인 × 평일/주말·공휴일로 나눠 추정(업종군별 회귀 → 역분산 합성)
  B. rc_trigger_day_pool.csv  트리거일(비 10mm+)의 외지인 결제 규모: 실제, 기준선, 감소분(= 사라진 방문), 관광데이터랩 방문자 환산
  C. rc_ticket_cap.csv        외지인 건당 결제액 분포와 할인율×상한별 기대 할인액, 상한에 걸리는 비중
@@ -12,6 +13,7 @@
  F. rc_validity.csv          유효기간별 도달 월·방문자 커버·유효기간 안 추가 트리거 기대 수
  G. rc_threshold.csv         확정 문턱(1/5/10/20/30mm)별 외지인 손실 커버와 손실 없는 날 비중
  H. rc_monthly_cap.csv       월 2회 발급 제한이 깎는 발급 비중(월별 트리거 일수 분포)
+ I. rc_budget_effect.csv     시즌 예산 × 사중손실별 발급 수·순증 매출·외지인 손실 회복률(rc05)
  rc_assumptions.csv          비용 모델 가정 목록
 """
 import sys
@@ -28,6 +30,7 @@ import common as C
 from analysis import RC, SURFACE, INK, INK2, MUTED, WASH, REGION_COLOR, exclusion_days, deviation, run_series, pool, pct, finish
 
 RC_GROUPS = ["음식점", "카페·베이커리", "숙박", "여가·스포츠"]
+RC_SCOPE = "레인체크 업종군(음식·카페·숙박·여가, 소상공인 중심 업종)"
 CTRL = ["is_holiday", "is_chuseok_block", "is_pre_long_off", "is_post_long_off", "is_sandwich", "is_special"]
 ORIGIN_NAME = {"local": "현지인", "nonlocal": "외지인"}
 # 2026년 7~12월 공휴일(대체공휴일 포함, 추정): 광복절 대체 8/17, 추석 9/24~26 + 대체 9/28, 개천절 대체 10/5, 한글날 10/9, 성탄절 12/25
@@ -59,23 +62,30 @@ def load_all():
 
 # ---------------------------------------------------------------- A. 민감도: 거주지 × 평일/주말
 def sensitivity_dow(rs, cal, w):
-    x = rs[rs.group.isin(C.FACE_GROUPS)].groupby(["region", "group", "date"])[["sales_local", "sales_nonlocal", "cnt_local", "cnt_nonlocal"]].sum().reset_index()
-    parts = []
-    for origin in ["local", "nonlocal"]:
-        d = x[["region", "group", "date"]].copy()
-        d["origin"], d["sales"], d["cnt"] = origin, x[f"sales_{origin}"], x[f"cnt_{origin}"]
-        parts.append(d)
-    rl = pd.concat(parts, ignore_index=True)
-    rl["y"] = np.log1p(rl.sales).where(rl.sales > 0)
-    rl["y_cnt"] = np.log1p(rl.cnt).where(rl.cnt > 0)
-    rl = rl.merge(cal, on="date").merge(w[["region", "date", "rain_biz10", "heat_day", "tropical", "rain_biz10_lag1", "rain_biz10_lead1"]], on=["region", "date"])
-    rl["rain_wd"] = rl.rain_biz10 * (1 - rl.is_offday)
-    rl["rain_we"] = rl.rain_biz10 * rl.is_offday
+    def build(sub):
+        x = sub.groupby(["region", "group", "date"])[["sales_local", "sales_nonlocal", "cnt_local", "cnt_nonlocal"]].sum().reset_index()
+        parts = []
+        for origin in ["local", "nonlocal"]:
+            d = x[["region", "group", "date"]].copy()
+            d["origin"], d["sales"], d["cnt"] = origin, x[f"sales_{origin}"], x[f"cnt_{origin}"]
+            parts.append(d)
+        rl = pd.concat(parts, ignore_index=True)
+        rl["y"] = np.log1p(rl.sales).where(rl.sales > 0)
+        rl["y_cnt"] = np.log1p(rl.cnt).where(rl.cnt > 0)
+        rl = rl.merge(cal, on="date").merge(w[["region", "date", "rain_biz10", "heat_day", "tropical", "rain_biz10_lag1", "rain_biz10_lead1"]], on=["region", "date"])
+        rl["rain_wd"] = rl.rain_biz10 * (1 - rl.is_offday)
+        rl["rain_we"] = rl.rain_biz10 * rl.is_offday
+        return rl
+
+    # 대면 업종군 전체(분석 범위)와 레인체크 업종군(소상공인 중심 업종만)을 따로 집계한다
+    rl_all = build(rs[rs.group.isin(C.FACE_GROUPS)])
+    rl_rc = build(rs[rs.group.isin(RC_GROUPS) & (rs.small_biz == 1)])
     XV = ["rain_wd", "rain_we", "heat_day", "tropical", "rain_biz10_lag1"]
     out = []
     for yv, yname in [("y", "매출"), ("y_cnt", "결제 건수")]:
-        res = run_series(rl, ["region", "group", "origin"], XV, CTRL, y=yv)
-        for scope_name, groups in [("대면 업종군 전체", C.FACE_GROUPS), ("레인체크 업종군(음식·카페·숙박·여가)", RC_GROUPS)]:
+        res_all = run_series(rl_all, ["region", "group", "origin"], XV, CTRL, y=yv)
+        res_rc = run_series(rl_rc, ["region", "group", "origin"], XV, CTRL, y=yv)
+        for scope_name, res, groups in [("대면 업종군 전체", res_all, C.FACE_GROUPS), (RC_SCOPE, res_rc, RC_GROUPS)]:
             sub = res[res.group.isin(groups) & res["var"].isin(["rain_wd", "rain_we"])]
             p = pool(sub, ["var", "region", "origin"]).reset_index()
             nev = sub.groupby(["var", "region", "origin"]).n_event.max().rename("n_event_max").reset_index()
@@ -83,9 +93,10 @@ def sensitivity_dow(rs, cal, w):
             p["지표"], p["범위"] = yname, scope_name
             out.append(p)
         # 업종군별도 남긴다(레인체크 업종군만)
-        sub = res[res.group.isin(RC_GROUPS) & res["var"].isin(["rain_wd", "rain_we"])].copy()
+        sub = res_rc[res_rc.group.isin(RC_GROUPS) & res_rc["var"].isin(["rain_wd", "rain_we"])].copy()
         sub["지표"] = yname
         out.append(sub.rename(columns={"group": "업종군"}).assign(범위="업종군별", k=1))
+    rl = rl_rc
     A = pd.concat(out, ignore_index=True)
     A["요일"] = A["var"].map({"rain_wd": "평일", "rain_we": "주말·공휴일"})
     A["거주지"] = A.origin.map(ORIGIN_NAME)
@@ -100,7 +111,7 @@ def sensitivity_dow(rs, cal, w):
 
 # ---------------------------------------------------------------- B. 트리거일 외지인 결제 규모
 def trigger_pool(rs, cal, excl, w):
-    x = rs[(rs.region == "chuncheon") & rs.group.isin(RC_GROUPS)].groupby("date")[["sales_nonlocal", "cnt_nonlocal", "sales_local", "cnt_local"]].sum().reset_index()
+    x = rs[(rs.region == "chuncheon") & rs.group.isin(RC_GROUPS) & (rs.small_biz == 1)].groupby("date")[["sales_nonlocal", "cnt_nonlocal", "sales_local", "cnt_local"]].sum().reset_index()
     x["region"] = "chuncheon"
     rows = {}
     for v in ["cnt_nonlocal", "sales_nonlocal", "cnt_local"]:
@@ -143,7 +154,7 @@ def trigger_pool(rs, cal, excl, w):
 # ---------------------------------------------------------------- C. 건당 결제액과 상한
 def ticket_cap(sc):
     c2 = C.load("card2_clean").merge(sc, on=["region", "industry"])
-    t = c2[(c2.region == "chuncheon") & (c2.origin == "nonlocal") & c2.group.isin(RC_GROUPS) & (c2.in_scope == 1) & (c2.cnt > 0)].copy()
+    t = c2[(c2.region == "chuncheon") & (c2.origin == "nonlocal") & c2.group.isin(RC_GROUPS) & (c2.in_scope == 1) & (c2.small_biz == 1) & (c2.cnt > 0)].copy()
     t["ticket"] = t.sales / t.cnt
     t = t[t.ticket > 0]
     rates = [0.10, 0.15, 0.20, 0.25, 0.30]
@@ -249,7 +260,8 @@ def cost_model(t, B, D, c26, ratio):
         came_card = n_wd * b.loc["평일", "트리거일 외지인 결제 건수(실제 평균)"] + n_we * b.loc["주말·공휴일", "트리거일 외지인 결제 건수(실제 평균)"]
         demand.append({"월": int(r.월), "기대 트리거 일수": r["2026 기대 트리거 일수(관측 10mm 확정)"], "트리거일 방문 외지인 합(명, 상한)": round(came), "사라진 방문 합(명, 상한)": round(lost), "트리거일 외지인 결제 건수 합(신한)": round(came_card)})
     Dm = pd.DataFrame(demand)
-    cost_per_coupon = base_cost / 1000
+    rec_cost = per_1000(BASE["rate_wd"], BASE["rate_we"], CAP_BY_GROUP, BASE["use_rate"], BASE["uses_per_coupon"], BASE["offday_use_share"], BASE["deadweight"])[0]
+    cost_per_coupon = rec_cost / 1000  # 추천안(상한 업종별) 단가로 예산을 나눈다
     rows = []
     for budget in [0.5e8, 1e8, 2e8, 3e8]:
         n = budget / cost_per_coupon
@@ -339,7 +351,7 @@ def monthly_cap(c26, n_sim=20000, seed=0):
 def figures(A, Cc, t, D, G, alloc, exp_disc, tick_mean):
     plt.rcParams.update(RC)
     # rc01: 민감도 평일/주말 × 거주지(매출·건수), 춘천 레인체크 업종군
-    a = A[(A.범위 == "레인체크 업종군(음식·카페·숙박·여가)") & (A.지역 == "춘천")]
+    a = A[(A.범위 == RC_SCOPE) & (A.지역 == "춘천")]
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.2), layout="constrained")
     for ax, ind in zip(axes, ["매출", "결제 건수"]):
         s = a[a.지표 == ind]
@@ -402,6 +414,43 @@ def figures(A, Cc, t, D, G, alloc, exp_disc, tick_mean):
     finish(fig, C.FIG, "rc04_cost_grid", "순증 매출은 사용률·사용 횟수·결제액으로 정해지고 할인율·상한은 비용만 바꾼다. 수요는 예산을 크게 넘으므로 월 한도가 필수다")
 
 
+# ---------------------------------------------------------------- I. 예산 × 사중손실 → 순증 매출과 외지인 손실 회복률
+def budget_effect(B, D, exp_disc, tick_mean):
+    """시즌 예산(할인액)을 추천안 단가(평일 20%·주말 10%, 상한 업종별)로 나눈 발급 수와, 사용률·사용 횟수·사중손실 가정에 따른 순증 매출.
+    회복률의 분모는 레인체크 업종군(소상공인) 외지인의 호우일 매출 감소(2025 평일·주말 평균) × 2026 기대 트리거 일수(요일별)다."""
+    disc = (1 - BASE["offday_use_share"]) * exp_disc(BASE["rate_wd"], CAP_BY_GROUP) + BASE["offday_use_share"] * exp_disc(BASE["rate_we"], CAP_BY_GROUP)
+    cost_coupon = BASE["use_rate"] * BASE["uses_per_coupon"] * disc
+    sales_coupon = BASE["use_rate"] * BASE["uses_per_coupon"] * tick_mean
+    trig = D[D.월 != "합계"]
+    b = B.set_index("요일")
+    season_loss = float((trig["그중 평일"] * b.loc["평일", "매출 감소(억)"] + trig["그중 주말·공휴일"] * b.loc["주말·공휴일", "매출 감소(억)"]).sum()) * 1e8
+    rows = []
+    for budget in [0.5e8, 1e8, 2e8, 3e8]:
+        n = budget / cost_coupon
+        for dw, src in [(0.39, "관광공사 숙박할인권 실측(61.3%가 계획에 없던 여행)"), (0.40, "기본값"), (0.50, "감도"), (0.74, "KDI 재난지원금(보수적 상한)")]:
+            net = n * sales_coupon * (1 - dw)
+            rows.append({"시즌 예산(억, 할인액)": budget / 1e8, "쿠폰 1장당 기대 비용(원)": round(cost_coupon), "발급(장)": round(n), "쿠폰 사용자(명, 사용률 50%)": round(n * BASE["use_rate"]),
+                         "사중손실": dw, "사중손실 근거": src, "재방문 매출(억)": round(n * sales_coupon / 1e8, 2), "순증 매출(억)": round(net / 1e8, 2), "순증 매출 ÷ 예산": round(net / budget, 2),
+                         "외지인 호우 손실(억, 시즌)": round(season_loss / 1e8, 1), "손실 회복률(%)": round(net / season_loss * 100, 1)})
+    E = pd.DataFrame(rows)
+    E.to_csv(C.TAB / "rc_budget_effect.csv", index=False, encoding="utf-8-sig")
+    be = 1 - cost_coupon / sales_coupon
+    print(f"\n=== I. 예산별 효과: 장당 비용 {cost_coupon:,.0f}원, 장당 재방문 매출 {sales_coupon:,.0f}원, 비용=순증 되는 사중손실 {be*100:.0f}%, 시즌 외지인 손실 {season_loss/1e8:.1f}억")
+    print(E[E.사중손실.isin([0.4, 0.74])].to_string(index=False))
+    plt.rcParams.update(RC)
+    fig, axes = plt.subplots(1, 2, figsize=(10, 4), layout="constrained")
+    for dw, color, lab in [(0.39, REGION_COLOR["chuncheon"], "사중손실 39%(관광공사 실측)"), (0.5, "#f3a683", "50%"), (0.74, MUTED, "74%(KDI 재난지원금 상한)")]:
+        e = E[E.사중손실 == dw]
+        axes[0].plot(e["시즌 예산(억, 할인액)"], e["순증 매출(억)"], marker="o", color=color, label=lab)
+        axes[1].plot(e["시즌 예산(억, 할인액)"], e["손실 회복률(%)"], marker="o", color=color, label=lab)
+    axes[0].plot([0.5, 3], [0.5, 3], ls="--", color=INK2, lw=1, label="순증 매출 = 예산")
+    axes[0].set_xlabel("시즌 예산(억 원, 할인액)"); axes[0].set_ylabel("순증 매출(억 원)"); axes[0].set_title("예산별 순증 매출(사용률 50%, 1장당 2회 사용)"); axes[0].legend(fontsize=8)
+    axes[1].set_xlabel("시즌 예산(억 원, 할인액)"); axes[1].set_ylabel("%"); axes[1].set_title(f"외지인 호우 손실(시즌 {season_loss/1e8:.0f}억) 회복률"); axes[1].legend(fontsize=8)
+    finish(fig, C.FIG, "rc05_budget_effect", f"레인체크 예산별 효과: 쿠폰 1장당 비용 {cost_coupon:,.0f}원, 재방문 매출 {tick_mean*BASE['use_rate']*BASE['uses_per_coupon']:,.0f}원. 사중손실이 {be*100:.0f}%를 넘기 전까지는 순증 매출이 비용보다 크다")
+    plt.close(fig)
+    return E
+
+
 def main():
     cal, excl, w, sc, rs = load_all()
     A, rl = sensitivity_dow(rs, cal, w)
@@ -413,7 +462,8 @@ def main():
     Gt = threshold_cov(d)
     H = monthly_cap(c26)
     figures(A, Cc, t, D, G, alloc, exp_disc, tick_mean)
-    print("\n저장: rc_sensitivity_dow, rc_trigger_day_pool, rc_ticket_cap, rc_trigger_months, rc_cost_per_1000, rc_cost_grid, rc_budget, rc_budget_months, rc_demand_months, rc_validity, rc_threshold, rc_monthly_cap, rc_assumptions; 그림 rc01~rc04")
+    budget_effect(B, D, exp_disc, tick_mean)
+    print("\n저장: rc_sensitivity_dow, rc_trigger_day_pool, rc_ticket_cap, rc_trigger_months, rc_cost_per_1000, rc_cost_grid, rc_budget, rc_budget_months, rc_demand_months, rc_validity, rc_threshold, rc_monthly_cap, rc_budget_effect, rc_assumptions; 그림 rc01~rc05")
 
 
 if __name__ == "__main__":

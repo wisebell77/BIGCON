@@ -271,8 +271,9 @@ def main():
     M = pd.read_csv(C.TAB / "al_cluster_stores_rect.csv", encoding="utf-8-sig", dtype={"상가업소번호": str})
     M = M.merge(st[["상가업소번호", "big", "grade_V", "rain_loss", "pay20", "sales_day"]], on="상가업소번호", how="left")
     RULE = {"gangnam": "법정(30개)", "chuncheon": "완화(15개)"}
-    METHODS = {"rect": {"name": "길따라", "label": "길 따라 창", "desc": "업소가 늘어선 방향으로 돌린 2천㎡ 직사각형 창(100×20·80×25·63×32m 중 최댓값) 안 업소 수"},
-               "circle": {"name": "원형", "label": "원형 창", "desc": "반경 25.2m 원(2천㎡) 안 업소 수"}}
+    METHODS = {"rect": {"name": "길따라", "label": "창 방식(길 따라)", "desc": "업소가 늘어선 방향으로 돌린 2천㎡ 직사각형 창(100×20·80×25·63×32m 중 최댓값) 안 업소 수가 기준 이상인 밀집 핵을 묶은 구역(비교용)"},
+               "circle": {"name": "원형", "label": "창 방식(원형)", "desc": "반경 25.2m 원(2천㎡) 안 업소 수가 기준 이상인 밀집 핵을 묶은 구역(비교용)"}}
+    TEAM_METHOD = {"team": {"label": "길 단위 묶음(기본)", "desc": "생활업종·소상공인 점포만 남기고 같은 골목('~길')에서 50m 이내로 이어진 점포를 묶어 100m 구간 안 15개 이상(춘천 조례 2,000㎡)인 구역. 99_team_zones.py"}}
 
     def outline(xy):
         """업소 점들을 30m 넓힌 뒤 12m 깎은 외곽선(업소 주변 18m). 핵 연결 거리 50m가 끊기지 않고, 길을 따라 늘어선 구역은 띠 모양이 된다."""
@@ -348,6 +349,34 @@ def main():
         vshare = mm[mm[col] >= 0].groupby(col).voucher.mean()
         for c in cands["chuncheon"][mk]:
             c["voucher_share_%"] = round(float(vshare[c["id"]]) * 100, 1) if c["id"] in vshare.index else None
+
+    # ------------------------------------------------------------ 춘천 기본 레이어: 길 단위 묶음(팀 정의, 99번 결과)과 관광 거점
+    TZ = pd.read_csv(C.TAB / "al_team_zones.csv", encoding="utf-8-sig")
+    TS = pd.read_csv(C.TAB / "al_team_zone_stores.csv", encoding="utf-8-sig", dtype={"상가업소번호": str})
+    TS = TS[["구역", "상가업소번호"]].merge(st[["상가업소번호", "x", "y", "industry", "big", "grade_V", "rain_loss", "pay20", "sales_day"]], on="상가업소번호", how="left").merge(cc[["상가업소번호", "voucher"]], on="상가업소번호", how="left")
+    team_list = []
+    for _, z in TZ.iterrows():
+        g = TS[TS.구역 == z.구역]
+        if len(g) < 3:
+            continue
+        shape = outline(list(zip(g.x, g.y)))
+        ss = store_stats(g)
+        mapped = g[g.industry.notna()]
+        sales_sum = float(mapped.sales_day.fillna(0).sum())
+        team_list.append({"id": int(z.구역), "method": "team", "method_label": TEAM_METHOD["team"]["label"], "name": f"{z.길} 골목({z.행정동})", "emd": z.행정동, "ldong": z.길,
+                          "area_m2": round(float(shape.area)), "n_stores": int(len(g)), "mapped": int(len(mapped)), "food_share": ss["음식 업종 비중"], "vuln_stores": ss["취약 등급 업소"],
+                          "rain_loss_만원": ss["호우일 하루 손실(만원)"], "pay20_만원": ss["20mm 시즌 기대 지급액(만원)"], "sales_day_만원": round(sales_sum, 1),
+                          "loss_rate_%": round(ss["호우일 하루 손실(만원)"] / sales_sum * 100, 1) if sales_sum else None, "top": ss["주요 업종(상위 3)"],
+                          "vuln_share_%": round(ss["취약 등급 업소"] / len(mapped) * 100, 1) if len(mapped) else None,
+                          "voucher_share_%": round(float(g.voucher.mean()) * 100, 1) if g.voucher.notna().any() else None,
+                          "tier": z["관광 동선 구분"], "hub_name": z["가까운 역·터미널"], "hub_km": float(z["역·터미널 거리(km)"]), "poi_name": z["가까운 도심 관광 거점"], "poi_km": float(z["도심 관광 거점 거리(km)"]),
+                          "stage1": bool(z["1단계 시범 대상"]), "payout_wd_만원": float(z["하루 지급액 평일(만원)"]), "emd_sales_2023": emd_sales.get(z.행정동, ""),
+                          "rings": poly_to_lonlat(shape, P5179, tol=1.0)})
+    cands["chuncheon"]["team"] = team_list
+    cands["gangnam"]["team"] = []
+    print(f"춘천 길 단위 묶음(팀 정의) {len(team_list)}개, 점포 {sum(c['n_stores'] for c in team_list):,}개, 호우일 하루 손실 {sum(c['rain_loss_만원'] for c in team_list) / 1e4:,.2f}억")
+    hubs = pd.read_csv(C.ROOT / "data" / "external" / "관광거점_좌표.csv", encoding="utf-8-sig")
+    hub_pts = [{"name": r.name, "group": r.kind, "lon": float(r.lon), "lat": float(r.lat), "src": r.src} for r in hubs.itertuples()]
     alley_pts = []
     for r in al.itertuples():
         m = re.search(r"춘천시\s+(\S+?)\s+(\d+)", r.주소)
@@ -393,11 +422,11 @@ def main():
         lon, lat = tm_inverse(e.x.values, e.y.values, **P5179)
         labels[region] = [{"name": n, "lon": round(float(a), 5), "lat": round(float(b), 5), "pop60": round(float(p))} for n, a, b, p in zip(e.emd_name, lon, lat, e.pop60)]
 
-    data["cand_methods"] = {mk: {"label": mt["label"], "desc": mt["desc"]} for mk, mt in METHODS.items()}
-    data["cand_default"] = "rect"
-    data["regions"]["gangnam"] = {"name": "강남구", "official": official, "candidates": cands["gangnam"], "cand_rule": RULE["gangnam"], "markets": [m for m in markets if m["region"] == "gangnam"], "alley_official": [], "tourist": [],
+    data["cand_methods"] = {**{mk: {"label": mt["label"], "desc": mt["desc"]} for mk, mt in TEAM_METHOD.items()}, **{mk: {"label": mt["label"], "desc": mt["desc"]} for mk, mt in METHODS.items()}}
+    data["cand_default"] = "team"
+    data["regions"]["gangnam"] = {"name": "강남구", "official": official, "candidates": cands["gangnam"], "cand_rule": RULE["gangnam"], "markets": [m for m in markets if m["region"] == "gangnam"], "alley_official": [], "tourist": [], "hubs": [],
                                   "bg": bg["gangnam"], "emd_lines": emd_lines, "emd_labels": labels["gangnam"]}
-    data["regions"]["chuncheon"] = {"name": "춘천시", "official": [], "candidates": cands["chuncheon"], "cand_rule": RULE["chuncheon"], "markets": [m for m in markets if m["region"] == "chuncheon"], "alley_official": alley_pts, "tourist": tourist,
+    data["regions"]["chuncheon"] = {"name": "춘천시", "official": [], "candidates": cands["chuncheon"], "cand_rule": RULE["chuncheon"], "markets": [m for m in markets if m["region"] == "chuncheon"], "alley_official": alley_pts, "tourist": tourist, "hubs": hub_pts,
                                     "bg": bg["chuncheon"], "emd_lines": [], "emd_labels": labels["chuncheon"]}
 
     def clean(o):
@@ -419,10 +448,13 @@ def main():
     tpl = (out_dir / "district_template.html").read_text(encoding="utf-8")
     assert tpl.count("__DATA__") == 1
     (out_dir / "상권지도.html").write_text(tpl.replace("__DATA__", js.replace("</", "<\\/")), encoding="utf-8")
-    # 춘천 표(두 방식 모두, 기본인 길 따라 창 먼저)
+    # 춘천 표(길 단위 묶음 먼저, 창 방식 두 가지는 비교용)
     rows = [{"구분": f"밀집 후보({c['method_label']}, {RULE['chuncheon']})", "방법": c["method_label"], "이름": c["name"], "행정동": c["emd"], "업소 수": c["n_stores"], "면적(㎡, 업소 외곽)": c["area_m2"], "음식 비중": c["food_share"], "취약 등급 업소": c["vuln_stores"],
              "호우일 하루 손실(만원)": c["rain_loss_만원"], "20mm 시즌 기대 지급액(만원)": c["pay20_만원"], "손실률(%)": c["loss_rate_%"], "취약 업소 비율(%)": c.get("vuln_share_%"), "상품권 가맹 비율(%)": c.get("voucher_share_%"), "주요 업종": c["top"], "읍면동 매출 구간(2023.7 상위3)": c["emd_sales_2023"]}
             for mk in METHODS for c in cands["chuncheon"][mk]]
+    rows = [{"구분": "골목 상권(길 단위 묶음, 팀 정의)", "방법": c["method_label"], "이름": c["name"], "행정동": c["emd"], "업소 수": c["n_stores"], "면적(㎡, 업소 외곽)": c["area_m2"], "음식 비중": c["food_share"], "취약 등급 업소": c["vuln_stores"],
+             "호우일 하루 손실(만원)": c["rain_loss_만원"], "20mm 시즌 기대 지급액(만원)": c["pay20_만원"], "손실률(%)": c["loss_rate_%"], "취약 업소 비율(%)": c.get("vuln_share_%"), "상품권 가맹 비율(%)": c.get("voucher_share_%"), "주요 업종": c["top"], "읍면동 매출 구간(2023.7 상위3)": c["emd_sales_2023"],
+             "관광 동선 구분": c["tier"], "지원금 1단계": c["stage1"]} for c in cands["chuncheon"]["team"]] + rows
     rows += [{"구분": "골목형상점가(지정)", "이름": p["name"], "행정동": "", "업소 수": p["stores"], "주요 업종": p["items"], "비고": p["addr"]} for p in alley_pts]
     rows += [{"구분": "전통시장", "이름": m["name"], "업소 수": m["stores"], "주요 업종": m["items"], "비고": m["addr"]} for m in markets if m["region"] == "chuncheon"]
     rows += [{"구분": "관광지(지정)", "이름": t["name"], "주요 업종": t["type"], "비고": t["addr"]} for t in tourist]
